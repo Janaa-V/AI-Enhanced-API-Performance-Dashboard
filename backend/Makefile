@@ -2,27 +2,33 @@ SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
 BACKEND_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-UV ?= uv
+UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && echo "$$HOME/.local/bin/uv" ) || echo "uv")
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check check test clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
 	  'Backend commands (run from backend/):' \
-	  '  make setup         Install dependencies and create .env if missing' \
-	  '  make install       Sync dependencies; create/update uv.lock' \
-	  '  make sync          Sync dependencies using the existing lockfile' \
-	  '  make env           Copy .env.example without replacing an existing .env' \
-	  '  make run           Start the backend with automatic reload' \
-	  '  make serve         Start the backend without reload' \
-	  '  make check         Run lint and formatting checks' \
-	  '  make format        Format Python code' \
-	  '  make test          Run backend tests' \
-	  '  make clean-logs    Delete backend .log and numbered rotated log files' \
-	  '  make clean-cache   Delete project Python/tool caches' \
-	  '  make clean         Run both cleanup commands' \
+	  '  make setup               Install dependencies and create .env if missing' \
+	  '  make install             Sync dependencies; create/update uv.lock' \
+	  '  make sync                Sync dependencies using the existing lockfile' \
+	  '  make env                 Copy .env.example without replacing an existing .env' \
+	  '  make run                 Start the backend with automatic reload' \
+	  '  make serve               Start the backend without reload' \
+	  '  make check               Run lint, formatting, type checks, and tests' \
+	  '  make lint                Run Ruff linter' \
+	  '  make format              Format Python code with Ruff' \
+	  '  make format-check        Check formatting with Ruff' \
+	  '  make typecheck           Run static type checks with Pyright' \
+	  '  make audit               Audit dependencies for CVEs with pip-audit' \
+	  '  make test                Run backend tests with pytest' \
+	  '  make pre-commit          Run pre-commit hooks on all files' \
+	  '  make pre-commit-install  Install pre-commit Git hooks' \
+	  '  make clean-logs          Delete backend .log and numbered rotated log files' \
+	  '  make clean-cache         Delete project Python/tool caches' \
+	  '  make clean               Run both cleanup commands' \
 	  '' \
 	  'Overrides: make run PORT=8001 HOST=0.0.0.0' \
 	  '           make setup UV=/absolute/path/to/uv' \
@@ -65,7 +71,19 @@ format: check-uv
 format-check: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run ruff format --check .
 
-check: lint format-check
+typecheck: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pyright
+
+audit: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pip-audit
+
+pre-commit: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pre-commit run --all-files
+
+pre-commit-install: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pre-commit install
+
+check: lint format-check typecheck test
 
 test: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run pytest
