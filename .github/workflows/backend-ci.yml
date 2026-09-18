@@ -1,0 +1,144 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_LOCKED: "true"
+  UV_NO_PROGRESS: "true"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  quality:
+    name: Backend quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.16"
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Lint
+        run: make lint
+      - name: Check formatting
+        run: make format-check
+      - name: Check types
+        run: make typecheck
+
+  unit-tests:
+    name: Backend unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.16"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Run unit tests without database credentials
+        run: env -u DB_PASSWORD -u AI_API_KEY make test
+
+  dependency-audit:
+    name: Backend dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.16"
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Audit installed runtime and development dependencies
+        run: make audit
+
+  secret-scan:
+    name: Repository secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download and verify Gitleaks
+        env:
+          GITLEAKS_VERSION: "8.24.0"
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          release="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tool_dir="${RUNNER_TEMP}/gitleaks"
+          mkdir -p "$tool_dir"
+          cd "$tool_dir"
+          curl --fail --silent --show-error --location --retry 3 "$release/$archive" --output "$archive"
+          curl --fail --silent --show-error --location --retry 3 "$release/gitleaks_${GITLEAKS_VERSION}_checksums.txt" --output checksums.txt
+          awk -v archive="$archive" '$2 == archive { print }' checksums.txt > selected-checksum.txt
+          test -s selected-checksum.txt
+          sha256sum --check selected-checksum.txt
+          tar -xzf "$archive" gitleaks
+      - name: Scan Git history with redacted findings
+        run: '"${RUNNER_TEMP}/gitleaks/gitleaks" git --redact --log-opts="--all" .'
+
+  required:
+    name: Backend CI passed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: ${{ always() }}
+    needs: [quality, unit-tests, dependency-audit, secret-scan]
+    steps:
+      - name: Require every check to succeed
+        working-directory: .
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.unit-tests.result }}
+          AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+          SECRET_RESULT: ${{ needs.secret-scan.result }}
+        run: |
+          for result in "$QUALITY_RESULT" "$TEST_RESULT" "$AUDIT_RESULT" "$SECRET_RESULT"; do
+            if [ "$result" != success ]; then
+              echo "A required backend check failed, was cancelled, or was skipped."
+              exit 1
+            fi
+          done
