@@ -1,0 +1,50 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+build/
+dist/
+.uv-cache/
+
+# Local database and runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+backend/data/*
+!backend/data/.gitkeep
+*.log
+*.log.[0-9]*
+
+# Frontend generated files
+node_modules/
+coverage/
+*.tsbuildinfo
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Keep uv.lock tracked for reproducible installs.
