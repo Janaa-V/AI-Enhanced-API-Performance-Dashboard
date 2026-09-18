@@ -1,0 +1,85 @@
+SHELL := /bin/sh
+.DEFAULT_GOAL := help
+
+BACKEND_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+UV ?= uv
+HOST ?= 127.0.0.1
+PORT ?= 8000
+
+.PHONY: help check-uv install sync env setup run serve lint format format-check check test clean-logs clean-cache clean
+
+help:
+	@printf '%s\n' \
+	  'Backend commands (run from backend/):' \
+	  '  make setup         Install dependencies and create .env if missing' \
+	  '  make install       Sync dependencies; create/update uv.lock' \
+	  '  make sync          Sync dependencies using the existing lockfile' \
+	  '  make env           Copy .env.example without replacing an existing .env' \
+	  '  make run           Start the backend with automatic reload' \
+	  '  make serve         Start the backend without reload' \
+	  '  make check         Run lint and formatting checks' \
+	  '  make format        Format Python code' \
+	  '  make test          Run backend tests' \
+	  '  make clean-logs    Delete backend .log and numbered rotated log files' \
+	  '  make clean-cache   Delete project Python/tool caches' \
+	  '  make clean         Run both cleanup commands' \
+	  '' \
+	  'Overrides: make run PORT=8001 HOST=0.0.0.0' \
+	  '           make setup UV=/absolute/path/to/uv' \
+	  'Cleanup preserves .env, database configuration, .venv, and uv.lock.'
+
+check-uv:
+	@command -v "$(UV)" >/dev/null 2>&1 || { \
+	  printf '%s\n' 'uv is unavailable. Restart your terminal after installation or set UV=/path/to/uv.' >&2; \
+	  exit 1; \
+	}
+
+install: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" sync
+
+sync: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" sync --locked
+
+env:
+	@if [ -e "$(BACKEND_DIR)/.env" ] || [ -L "$(BACKEND_DIR)/.env" ]; then \
+	  printf '%s\n' 'Existing backend/.env preserved.'; \
+	else \
+	  cp -n "$(BACKEND_DIR)/.env.example" "$(BACKEND_DIR)/.env" && \
+	  printf '%s\n' 'Created backend/.env from the example; update settings as needed.'; \
+	fi
+
+setup: install env
+
+run: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run uvicorn app.main:app --reload --host "$(HOST)" --port "$(PORT)"
+
+serve: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run uvicorn app.main:app --host "$(HOST)" --port "$(PORT)"
+
+lint: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run ruff check .
+
+format: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run ruff format .
+
+format-check: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run ruff format --check .
+
+check: lint format-check
+
+test: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pytest
+
+clean-logs:
+	@find "$(BACKEND_DIR)" -type d \( -name .venv -o -name .git -o -name node_modules \) -prune -o \
+	  -type f \( -name '*.log' -o -name '*.log.[0-9]*' \) -exec rm -f -- {} +
+	@printf '%s\n' 'Removed backend log files.'
+
+clean-cache:
+	@find "$(BACKEND_DIR)/app" "$(BACKEND_DIR)/scripts" "$(BACKEND_DIR)/tests" \
+	  -type d -name __pycache__ -prune -exec rm -rf -- {} +
+	@rm -rf -- "$(BACKEND_DIR)/.pytest_cache" "$(BACKEND_DIR)/.ruff_cache" "$(BACKEND_DIR)/.mypy_cache" "$(BACKEND_DIR)/htmlcov"
+	@rm -f -- "$(BACKEND_DIR)/.coverage" "$(BACKEND_DIR)"/.coverage.*
+	@printf '%s\n' 'Removed backend Python and tool caches.'
+
+clean: clean-logs clean-cache

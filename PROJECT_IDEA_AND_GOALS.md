@@ -12,7 +12,7 @@ This project reflects the type of work involved in building and improving produc
 
 - Build a complete full-stack application with a FastAPI backend and a React frontend built with Vite and TypeScript.
 - Simulate realistic API traffic across several backend endpoints with varied response times and occasional failures.
-- Record request-level performance data in a lightweight SQLite database.
+- Record request-level performance data in PostgreSQL.
 - Aggregate the collected data into useful performance metrics and visualizations.
 - Provide an intuitive dashboard for reviewing latency, throughput, error rates, and recent requests.
 - Add an AI-assisted insights layer that explains notable patterns and suggests possible optimizations.
@@ -21,14 +21,14 @@ This project reflects the type of work involved in building and improving produc
 
 ## Backend Goals
 
-The backend will be built with Python and FastAPI. It will provide the application API, simulated endpoint traffic, metrics aggregation, data persistence, and AI analysis.
+The backend uses Python, FastAPI, and PostgreSQL, with SQLAlchemy and Psycopg for asynchronous database access. It will provide the application API, simulated endpoint traffic, metrics aggregation, data persistence, and AI analysis. Local PostgreSQL runs in Docker Compose with persistent volume storage; schema changes will use Alembic migrations when request models are introduced.
 
 The backend will:
 
 - Expose several mock API endpoints that represent common backend operations, such as user, order, product, search, and reporting services.
 - Introduce controlled variation in response times and simulated error behavior so the dashboard has meaningful data to display.
 - Capture each request's endpoint, HTTP method, status code, latency, and timestamp.
-- Store request logs in SQLite using a simple and maintainable schema.
+- Store request logs in PostgreSQL using a simple and maintainable schema.
 - Provide an aggregated metrics endpoint for the frontend, including average latency, request counts, error counts, error rates, status-code breakdowns, and recent requests.
 - Provide an analysis endpoint that sends a structured metrics summary to an AI provider and returns a concise natural-language response.
 - Keep AI-provider integration behind a service boundary so the provider can be changed without rewriting the rest of the backend.
@@ -64,4 +64,3 @@ The AI response will focus on practical questions such as:
 - What small optimization or investigation steps would be reasonable to try first?
 
 The goal is to provide useful, understandable guidance while being transparent that the feature is AI-assisted analysis rather than an autonomous monitoring system.
-
