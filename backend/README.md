@@ -8,6 +8,8 @@ The backend is a Python and FastAPI service using PostgreSQL for persistence. It
 
 See [the backend development plan](./DEVELOPMENT_PLAN.md) for proposed API contracts, data storage, implementation milestones, and verification criteria. The first usable milestone group covers service setup, simulated traffic, request recording, and dashboard metrics; AI integration follows.
 
+See [backend CI](./CI.md) for automated checks, local verification, and required branch-check setup. CI unit tests run without PostgreSQL.
+
 ## Responsibilities
 
 - Expose mock endpoints that simulate common backend services with varied latency and occasional errors.
