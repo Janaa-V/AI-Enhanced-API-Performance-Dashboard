@@ -1,5 +1,6 @@
 """Test stand-ins for randomness and time, shared by the simulation and route tests."""
 
+import asyncio
 from collections.abc import Callable, Sequence
 
 from fastapi.testclient import TestClient
@@ -33,3 +34,38 @@ class FakeSleep:
 
 
 MakeClient = Callable[..., tuple[TestClient, FakeSleep]]
+
+
+class FakeClock:
+    """A clock a test moves by hand, so latency is exact and needs no real waiting."""
+
+    START = 1000.0
+
+    def __init__(self) -> None:
+        self.now = self.START
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+class InMemoryRecorder:
+    """Collects records instead of saving them. Optionally blocks, slows, or fails."""
+
+    def __init__(
+        self, *, gate: "asyncio.Event | None" = None, error: Exception | None = None
+    ) -> None:
+        self.records: list = []
+        self.events: list[str] = []
+        self.gate = gate
+        self.error = error
+
+    async def record(self, record: object) -> None:
+        self.events.append("record")
+        if self.gate is not None:
+            await self.gate.wait()
+        if self.error is not None:
+            raise self.error
+        self.records.append(record)
