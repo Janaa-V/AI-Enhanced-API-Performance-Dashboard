@@ -55,7 +55,8 @@ No model is trained or hosted. The backend sends a structured summary of recent 
 | Area | State |
 | --- | --- |
 | Service foundation: config, async database connection, `/health`, tooling, CI | Done |
-| Request model, migrations, demo routes, request logging | Planned |
+| Request model and migration | Done |
+| Demo routes and request logging | Planned |
 | `/metrics` API | Planned |
 | Traffic generator for demos | Planned |
 | React dashboard | Planned |
@@ -69,7 +70,7 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 | Layer | Technology |
 | --- | --- |
 | Backend | Python 3.12–3.14, FastAPI, SQLAlchemy (async), Psycopg 3, Pydantic |
-| Database | PostgreSQL 18; Alembic migrations (planned) |
+| Database | PostgreSQL 18, Alembic migrations |
 | Frontend | React, Vite, TypeScript, TanStack Query, Axios, Recharts |
 | AI | Google Gemini or Groq, called from the backend only |
 | Tooling | uv, Ruff, Pyright, pytest, pip-audit, pre-commit, gitleaks, GitHub Actions |
