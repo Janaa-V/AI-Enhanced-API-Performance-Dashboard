@@ -7,7 +7,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | Milestone | Scope | State |
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
-| 2. Simulation and recording | Request model, migration, simulation engine and five `GET /demo/*` routes (done); `POST /demo/orders` and logging middleware (planned) | In progress |
+| 2. Simulation and recording | Request model, migration, simulation engine and five `GET /demo/*` routes and `POST /demo/orders` (done); logging middleware (planned) | In progress |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
@@ -123,12 +123,15 @@ Design choices:
 | --- | --- |
 | `GET /health` | Readiness with a database check; `503` if the database is unavailable. Not measured. Implemented. |
 | `GET /demo/users`, `/orders`, `/products`, `/search`, `/reports` | Synthetic services, each with its own latency range and failure rate; reports are slowest. Failures return a consistent JSON error body. Implemented. |
+| `POST /demo/orders` | Creates a priced order from a validated JSON body and returns `201`; nothing is stored. Implemented. |
 | `GET /metrics` | Aggregated metrics for a time window |
 | `POST /analyze` | AI observations for a time window |
 
 ### Demo routes and the error format
 
 Each route returns small fixed data and never touches the database, so the measured time is exactly the simulated time. `GET /demo/search?q=lap` filters the products by name, ignoring case, and accepts a query of at most 100 characters.
+
+`POST /demo/orders` accepts `{"user_id": 2, "items": [{"product_id": 2, "quantity": 2}]}` and returns `201` with a random UUID `id`, `status: "created"`, and a `total` computed from the fixed product prices (rounded to cents). It is strict: `user_id` and `product_id` must be at least 1, there must be 1–20 items with a `quantity` of 1–99, and unknown fields are rejected so a typo such as `qty` is caught. An unknown `product_id` returns a `422` whose `loc` points at the exact field, for example `["body", "items", 1, "product_id"]`. Creating orders uses its own, slower and less reliable profile than listing them, so reads and writes look different on the dashboard.
 
 A simulated failure returns one JSON shape for every route and status:
 
@@ -142,7 +145,7 @@ A simulated failure returns one JSON shape for every route and status:
 | 503 | `service_unavailable` |
 | 504 | `gateway_timeout` |
 
-Invalid requests (for example a `q` longer than 100 characters) get a standard `422` immediately: handlers call the simulator only after FastAPI has validated the request, so bad input is never delayed or disguised as a simulated server failure. The interactive docs at `/docs` list, for each route, exactly the failure statuses its profile allows.
+Invalid requests (for example a `q` longer than 100 characters, or an order body that breaks the rules above) get a standard FastAPI `422` immediately: handlers call the simulator only after FastAPI has validated the request, so bad input is never delayed or disguised as a simulated server failure. The interactive docs at `/docs` list, for each route, exactly the failure statuses its profile allows.
 
 ### `GET /metrics`
 
@@ -173,6 +176,7 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 | `orders` | 60–250 ms | 5% | 500, 503 |
 | `search` | 80–400 ms | 3% | 503, 504 |
 | `reports` | 400–1500 ms | 8% | 504, 500 |
+| `orders_create` (`POST /demo/orders`) | 100–400 ms | 6% | 500, 503 |
 
 ## Testing
 

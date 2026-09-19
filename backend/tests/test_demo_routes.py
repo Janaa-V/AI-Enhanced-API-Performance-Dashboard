@@ -1,45 +1,20 @@
 """Verify the demo routes end to end, with the simulator's dice and clock controlled."""
 
-from collections.abc import Callable, Iterator
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.dependencies import get_simulator
 from app.api.errors import error_detail
 from app.config import Settings
 from app.main import create_app
-from app.services.simulation import DEFAULT_PROFILES, Simulator
-from tests.doubles import FakeSleep, ScriptedRandom
+from app.services.simulation import DEFAULT_PROFILES
+from tests.doubles import MakeClient
 
 # (URL name, key holding the list in the response, how many items it has)
 LIST_ROUTES = [("users", "users", 3), ("products", "products", 4), ("orders", "orders", 3)]
-ALL_ENDPOINTS = list(DEFAULT_PROFILES)
-MakeClient = Callable[..., tuple[TestClient, FakeSleep]]
-
-
-@pytest.fixture
-def make_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[MakeClient]:
-    """Build an app whose simulator uses scripted dice and a fake clock."""
-    monkeypatch.setattr("app.main.Database", lambda settings: AsyncMock())
-    clients: list[TestClient] = []
-
-    def make(*, roll: float = 0.999, latency_fraction: float = 0.5) -> tuple[TestClient, FakeSleep]:
-        sleep = FakeSleep()
-        simulator = Simulator(
-            rng=ScriptedRandom(latency_fraction=latency_fraction, roll=roll), sleep=sleep
-        )
-        application = create_app()
-        application.dependency_overrides[get_simulator] = lambda: simulator
-        client = TestClient(application)
-        client.__enter__()
-        clients.append(client)
-        return client, sleep
-
-    yield make
-    for client in clients:
-        client.__exit__(None, None, None)
+# Profiles that back a GET route (orders_create backs POST /demo/orders).
+GET_ENDPOINTS = [name for name in DEFAULT_PROFILES if name != "orders_create"]
 
 
 @pytest.mark.parametrize(("name", "key", "count"), LIST_ROUTES)
@@ -59,7 +34,7 @@ def test_the_report_route_returns_a_summary(make_client: MakeClient) -> None:
     assert len(body["rows"]) == 3
 
 
-@pytest.mark.parametrize("endpoint", ALL_ENDPOINTS)
+@pytest.mark.parametrize("endpoint", GET_ENDPOINTS)
 def test_each_route_waits_its_simulated_latency(make_client: MakeClient, endpoint: str) -> None:
     client, sleep = make_client(latency_fraction=0.5)
     client.get(f"/demo/{endpoint}")
@@ -68,7 +43,7 @@ def test_each_route_waits_its_simulated_latency(make_client: MakeClient, endpoin
     assert sleep.delays == [pytest.approx(midpoint)]
 
 
-@pytest.mark.parametrize("endpoint", ALL_ENDPOINTS)
+@pytest.mark.parametrize("endpoint", GET_ENDPOINTS)
 def test_a_forced_failure_uses_the_shared_error_body(
     make_client: MakeClient, endpoint: str
 ) -> None:
@@ -124,7 +99,8 @@ def test_the_docs_list_every_route_with_exactly_its_possible_failures(
 ) -> None:
     client, _ = make_client()
     paths = client.get("/openapi.json").json()["paths"]
-    for endpoint, profile in DEFAULT_PROFILES.items():
+    for endpoint in GET_ENDPOINTS:
+        profile = DEFAULT_PROFILES[endpoint]
         documented = set(paths[f"/demo/{endpoint}"]["get"]["responses"])
         assert {"200"} | {str(s) for s in profile.failure_statuses} <= documented
 

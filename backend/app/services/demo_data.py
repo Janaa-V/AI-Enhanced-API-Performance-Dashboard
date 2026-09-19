@@ -1,6 +1,8 @@
 """Fixed fake data for the demo endpoints. It never touches the database."""
 
-from app.schemas.demo import Order, Product, ReportResponse, ReportRow, User
+from collections.abc import Sequence
+
+from app.schemas.demo import Order, OrderItem, Product, ReportResponse, ReportRow, User
 
 DEMO_USERS = (
     User(id=1, name="Ada Lovelace"),
@@ -36,3 +38,21 @@ def search_products(query: str) -> list[Product]:
     """Products whose name contains the query, ignoring case; everything if it is empty."""
     needle = query.strip().lower()
     return [product for product in DEMO_PRODUCTS if needle in product.name.lower()]
+
+
+class UnknownProductError(ValueError):
+    def __init__(self, index: int, product_id: int) -> None:
+        super().__init__(f"Unknown product_id {product_id}")
+        self.index = index
+        self.product_id = product_id
+
+
+def price_order(items: Sequence[OrderItem]) -> float:
+    """Total price of the items. Raises UnknownProductError for a product that does not exist."""
+    prices = {product.id: product.price for product in DEMO_PRODUCTS}
+    total = 0.0
+    for index, item in enumerate(items):
+        if item.product_id not in prices:
+            raise UnknownProductError(index, item.product_id)
+        total += prices[item.product_id] * item.quantity
+    return round(total, 2)
