@@ -7,7 +7,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | Milestone | Scope | State |
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
-| 2. Simulation and recording | Request model, migration, simulation engine and five `GET /demo/*` routes and `POST /demo/orders` (done); logging middleware (planned) | In progress |
+| 2. Simulation and recording | Request model, migration, simulation engine and five `GET /demo/*` routes, `POST /demo/orders` and the recording service (done); logging middleware (planned) | In progress |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
@@ -164,6 +164,7 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 - Only `/demo/*` requests are recorded; `/health`, `/metrics`, `/analyze` and docs are excluded.
 - Delays use `asyncio.sleep`, so simulation never blocks other requests. Latency is measured with a monotonic clock, in milliseconds.
 - Failed responses, including simulated failures, are recorded. A logging failure is reported in application logs and never changes the endpoint's response.
+- `RequestRecorder` (`services/request_recorder.py`) saves one row per request in a short transaction with a 2-second limit. Recording is best effort: a failed or slow save is logged as a single line (the full traceback only at debug level) and dropped, while cancellation during shutdown is deliberately not swallowed. It takes a plain `RequestRecord` (method, route template, status, latency, UTC start time), so callers never touch the database model.
 - Each endpoint has a profile in `app/services/simulation/profiles.py`: a latency range, a failure probability and the server-error codes a failure chooses from. Latency is uniform within the range; a failing request still waits its full time first, like a real timeout.
 - `Simulator` (`simulator.py`) separates the decision from the side effects: `plan(profile)` is a pure function that returns the delay and outcome, and `simulate(profile)` waits and raises. It takes any profile, and receives its random generator and sleep function as parameters, so tests force any outcome and never wait in real time.
 - Two settings scale every profile (`SIMULATION_LATENCY_SCALE`, `SIMULATION_FAILURE_SCALE`), for example failures off for a quiet demo.
@@ -206,6 +207,7 @@ backend/
 │   ├── models.py                  SQLAlchemy models (request_logs)
 │   ├── schemas/                   Pydantic response models (demo, errors)
 │   ├── services/demo_data.py      Fixed fake data for the demo routes
+│   ├── services/request_recorder.py  Saves request_logs rows, best effort
 │   ├── services/simulation/       Simulated latency and failures
 │   │   ├── profiles.py            Per-endpoint behaviour (data)
 │   │   └── simulator.py           Decision (plan) and side effects (simulate)
