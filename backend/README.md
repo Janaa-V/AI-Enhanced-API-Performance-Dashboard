@@ -1,55 +1,46 @@
 # Backend
 
-## Purpose
+Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. It simulates API traffic, records every request, aggregates the data into dashboard metrics and produces AI-assisted observations.
 
-The backend is a Python and FastAPI service using PostgreSQL for persistence. It will provide the dashboard's data, simulated API traffic, metrics aggregation, and AI-assisted analysis.
+## Status
 
-## Development Plan
+| Milestone | Scope | State |
+| --- | --- | --- |
+| 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
+| 2. Simulation and recording | Five `/demo/*` routes, request model and migration, logging middleware | Planned |
+| 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
+| 4. Demonstration workflow | Bounded traffic-generator script | Planned |
+| 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
+| 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
-See [the backend development plan](./DEVELOPMENT_PLAN.md) for proposed API contracts, data storage, implementation milestones, and verification criteria. The first usable milestone group covers service setup, simulated traffic, request recording, and dashboard metrics; AI integration follows.
+Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; only `/health` exists today.
 
-See [backend CI](./CI.md) for automated checks, local verification, and required branch-check setup. CI unit tests run without PostgreSQL.
+## Quick start
 
-## Responsibilities
+Prerequisites: [uv](https://docs.astral.sh/uv/getting-started/installation/) and Docker.
 
-- Expose mock endpoints that simulate common backend services with varied latency and occasional errors.
-- Capture request metadata, including endpoint, HTTP method, status code, latency, and timestamp.
-- Persist request logs in PostgreSQL.
-- Aggregate request data into endpoint-level metrics, status-code breakdowns, latency trends, and recent-request records.
-- Expose metrics and analysis endpoints for the React frontend.
-- Call an external AI provider from an isolated service module and return concise performance observations.
-- Provide configuration for PostgreSQL connection settings, AI credentials, CORS, and analysis time windows.
+```bash
+# 1. Start PostgreSQL (see "Local PostgreSQL" below)
+# 2. From backend/:
+make setup            # install dependencies, create .env if missing
+# 3. Set DB_PASSWORD in .env to match the PostgreSQL container
+make run              # API on http://127.0.0.1:8000, docs at /docs
+```
 
-## Planned API
+| Command | Purpose |
+| --- | --- |
+| `make check` | Lint, format check, type check and tests |
+| `make test` | pytest (unit tests mock the database) |
+| `make format` | Format with Ruff |
+| `make audit` | Scan dependencies for known vulnerabilities |
+| `make pre-commit-install` | Install Git hooks (Ruff, gitleaks, key detection) |
+| `make clean` | Remove logs and caches; keeps `.env`, `.venv` and `uv.lock` |
 
-- `GET /metrics` returns aggregated performance data for the selected time window.
-- `POST /analyze` accepts an optional time window and returns an AI-generated summary of recent metrics.
-- Mock endpoints are grouped under a dedicated demo route prefix so monitoring traffic remains separate from dashboard API routes.
-
-## Core Modules
-
-The following list includes planned modules; models, schemas, request logging, and feature services are not implemented yet.
-
-- `app/main.py` initializes the FastAPI application, database, middleware, and routers.
-- `app/database.py` manages the PostgreSQL connection pool and request sessions.
-- `app/models.py` defines database models.
-- `app/schemas.py` defines request and response contracts.
-- `app/middleware/request_logging.py` records request performance data.
-- `app/services/metrics_service.py` calculates aggregates and trends.
-- `app/services/ai_analysis.py` builds prompts, calls the selected AI provider, and validates responses.
-- `app/api/routers/` contains endpoint handlers for mock traffic, metrics, and insights.
-
-## Local Configuration
-
-Settings are defined in `app/config.py`. See [environment and secret management](./ENVIRONMENT.md) for defaults, override rules, and deployment guidance.
-
-## Initial Scaffold
-
-The scaffold includes application configuration, CORS, an asynchronous SQLAlchemy/Psycopg PostgreSQL connection, and `GET /health` for database readiness. Startup verifies the connection and shutdown disposes the connection pool. Request tables, migrations, logging, demo routes, metrics, and AI integration follow the development plan.
+Run `make help` for the full list. Automated checks are described in [CI](./CI.md).
 
 ## Local PostgreSQL
 
-Local services can be managed separately in `~/Documents/os-services/compose.yaml`; that folder is outside this repository. To reproduce the setup, create that directory and save the following as `compose.yaml`:
+The database runs in Docker, outside this repository (`~/Documents/os-services/compose.yaml`), so its data survives project changes. To reproduce it, save the following as `compose.yaml` in that folder:
 
 ```yaml
 name: os-services
@@ -75,50 +66,100 @@ volumes:
   postgres_data:
 ```
 
-Create a private `.env` alongside it with `POSTGRES_PASSWORD` set to a strong development password. Keep that file untracked. Start the service before the backend:
+Create an untracked `.env` next to it with a strong `POSTGRES_PASSWORD`, then run `docker compose up -d --wait`. Set the same value as `DB_PASSWORD` in `backend/.env`.
 
-```bash
-cd ~/Documents/os-services
-docker compose up -d --wait
-docker compose ps
+- The port is bound to `127.0.0.1` only. `docker compose down` keeps the data volume; `down -v` deletes it.
+- The password applies when the volume is first created; editing the files later does not change an existing role's password.
+- The bootstrap role is a superuser, which is acceptable locally. Use a restricted role in production.
+
+## Configuration
+
+Settings are validated at startup by `app/config.py` (Pydantic). Values come from the process environment, which overrides `backend/.env`. Restart after changing them. Copy `.env.example` to `.env` (`make env` does this without overwriting).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | `127.0.0.1`, `5432`, `performance_dashboard`, `dashboard` | PostgreSQL connection |
+| `DB_PASSWORD` | none, required | Database password; kept separate from the URL so special characters need no escaping |
+| `CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed browser origins, as a JSON array |
+| `METRICS_WINDOW_MINUTES` | `60` | Default reporting window, 1–1440 |
+| `AI_PROVIDER` | `disabled` | `disabled`, `gemini` or `groq` |
+| `AI_API_KEY`, `AI_MODEL` | empty | Provider credentials and model, backend-only |
+| `AI_TIMEOUT_SECONDS` | `30` | Provider timeout, above 0 and at most 120 |
+| `ENVIRONMENT`, `APP_NAME` | `development`, `API Performance Dashboard` | Runtime label and API title |
+
+**Secrets:** `.env` is git-ignored and only `.env.example` is tracked. AI keys stay in the backend; frontend `VITE_*` variables are public. Secrets are `SecretStr` values and must never be logged. In CI and deployment, inject secrets through the platform's secret store. If a key leaks, revoke it: deleting it from Git does not invalidate it.
+
+## Data model
+
+One table, `request_logs`, created by an Alembic migration (never implicitly at startup):
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | bigint identity | Primary key |
+| `endpoint` | text | Normalised route path, no query string, body or credentials |
+| `method` | text | HTTP method |
+| `status_code` | integer | Response status |
+| `latency_ms` | double precision | Non-negative check constraint |
+| `timestamp` | `TIMESTAMPTZ` | Stored in UTC |
+
+Indexes: `timestamp`, and `(endpoint, timestamp)`.
+
+## API design
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Readiness with a database check; `503` if the database is unavailable. Not measured. Implemented. |
+| `GET /demo/users`, `/orders`, `/products`, `/search`, `/reports` | Synthetic services, each with its own latency range and failure rate; reports are slowest. Failures return a consistent JSON error body. |
+| `GET /metrics` | Aggregated metrics for a time window |
+| `POST /analyze` | AI observations for a time window |
+
+### `GET /metrics`
+
+Query parameters: `window_minutes` (default 60, 1–1440), `bucket_minutes` (default 5, 1–60), `recent_limit` (default 20, 1–100).
+
+Response: `window` (UTC start, end, bucket size), `summary` (total requests, errors, error rate, average latency, requests per minute), `endpoints` (the same per endpoint and method), `status_codes`, `latency_trend` (time buckets, overall and per endpoint) and `recent_requests` (newest first, ID as tie-breaker).
+
+Rules: filtering uses the half-open interval `[start, end)` with edge buckets clipped. Empty windows return zero counts, empty arrays, and null averages. Overall averages come from totals, not from averaging endpoint averages. Errors are HTTP status 400 and above.
+
+### `POST /analyze`
+
+Accepts an optional `window_minutes`. The server computes the metrics itself; clients cannot supply prompts or measurements. Returns the window, provider, generation time and analysis text. An empty window returns `no_data` without calling the provider. Missing configuration, timeouts, rate limits and malformed provider output return documented errors that expose no credentials or upstream details. Calls have a timeout, bounded input and output, a short cache and one in-flight request per window.
+
+## Simulation and recording
+
+- Only `/demo/*` requests are recorded; `/health`, `/metrics`, `/analyze` and docs are excluded.
+- Delays use `asyncio.sleep`, so simulation never blocks other requests. Latency is measured with a monotonic clock, in milliseconds.
+- Failed responses, including simulated failures, are recorded. A logging failure is reported in application logs and never changes the endpoint's response.
+- Latency ranges and failure rates are configurable, and randomness is injectable so tests are deterministic.
+- Automatic traffic generation is off by default. A local script generates bounded, varied traffic for demos.
+
+## Testing
+
+| Layer | Approach |
+| --- | --- |
+| Connection lifecycle, `/health` | Unit tests with a mocked database; no PostgreSQL, credentials or network needed. These run in CI. |
+| Request logging, metrics queries | Integration tests against an isolated PostgreSQL test database with migrations applied, marked separately from unit tests *(planned)* |
+| AI provider | Mocked responses covering timeouts, rate limits, malformed output and missing configuration *(planned)* |
+
+Queries need a real PostgreSQL because time binning, `TIMESTAMPTZ` and boundary behaviour are database behaviour that a mock cannot verify.
+
+## Structure
+
+```text
+backend/
+├── app/
+│   ├── main.py                    App factory, lifespan, CORS, routers
+│   ├── config.py                  Validated settings
+│   ├── database.py                Async engine and per-request sessions
+│   └── api/routers/health.py
+├── tests/
+├── pyproject.toml, uv.lock        Dependencies (locked)
+├── Makefile                       Developer commands
+└── CI.md                          Automated checks
 ```
 
-Connect at **127.0.0.1:5432**, with database `performance_dashboard` and user `dashboard`. Match `DB_PASSWORD` in `backend/.env` to `POSTGRES_PASSWORD` in `os-services/.env`; neither file should be committed. The database persists in a Docker named volume. `docker compose down` retains that volume; `down -v` deletes its data. Initialization credentials apply only to an empty volume. The local bootstrap role is a superuser; use a restricted application role in production.
+Planned additions: `models.py`, `schemas.py`, `middleware/request_logging.py`, `api/routers/{demo,metrics,analysis}.py`, `services/{metrics_service,ai_analysis,ai_providers}.py`, `migrations/`, `scripts/generate_traffic.py`.
 
-The connection uses separate `DB_*` fields so passwords with special characters do not require manual URL encoding. `app/database.py` provides `get_session` for future routes; writes must explicitly commit. No application tables are created yet.
+## Deployment assumptions
 
-Packages contain `__init__.py` files; empty directories use `.gitkeep` placeholders. PostgreSQL stores its data in the external Docker volume; `backend/data/` is not database storage.
-
-## Setup with the uv CLI
-
-From `backend/`, `make setup` installs dependencies and creates `.env` only if it is missing. Start development with `make run`. Use `make help` to see all commands, including `make check`, `make format`, `make clean-logs`, and `make clean`. `make sync` requires an existing lockfile and installs with `--locked`.
-
-Install the standalone uv tool using the [official installation instructions](https://docs.astral.sh/uv/getting-started/installation/), then restart your terminal and verify:
-
-```bash
-uv --version
-```
-
-From `backend/`, initialize the project environment:
-
-```bash
-uv sync --locked
-make env
-# Set DB_PASSWORD in .env to match os-services/.env before starting.
-uv run uvicorn app.main:app --reload
-```
-
-`uv sync` creates `.venv` and generates `uv.lock` on first setup. Use `uv sync` without `--locked` if the lockfile has not been generated yet. Commit the lockfile for reproducible installs. The selected local Python version is 3.14; project metadata supports Python 3.12–3.14.
-
-The standalone tool does not require pip. `uv run` uses the project virtual environment automatically, so shell activation is optional.
-
-Add dependencies with `uv add PACKAGE` or `uv add --dev PACKAGE`.
-
-Visit `http://127.0.0.1:8000/docs` for the API documentation. Run code checks from `backend/`:
-
-```bash
-uv run ruff check .
-uv run ruff format --check .
-```
-
-Run database lifecycle and health tests with `make test` or `uv run pytest`. These tests use mocks and do not require a running PostgreSQL container.
+One backend instance, a managed PostgreSQL with persistent storage, and explicit CORS origins. Before public deployment: add access controls or server-enforced quotas to `/analyze`, use a restricted database role, and decide a retention and cleanup policy for `request_logs`.
