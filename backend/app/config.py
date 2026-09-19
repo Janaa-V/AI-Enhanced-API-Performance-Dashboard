@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     db_host: str = "127.0.0.1"
     db_port: int = Field(default=5432, ge=1, le=65535)
     db_name: str = "performance_dashboard"
+    test_db_name: str = "performance_dashboard_test"
     db_user: str = "dashboard"
     db_password: SecretStr = SecretStr("")
     cors_origins: list[str] = ["http://localhost:5173"]

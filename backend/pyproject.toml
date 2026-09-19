@@ -30,6 +30,8 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-m 'not integration'"
+markers = ["integration: needs a PostgreSQL test database; run with make test-integration"]
 pythonpath = ["."]
 
 [tool.ruff]

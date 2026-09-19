@@ -1,4 +1,8 @@
-"""Alembic environment: uses the application's settings and model metadata."""
+"""Alembic environment: uses the application's settings and model metadata.
+
+A caller (such as the test suite) may pass a different database through
+`config.attributes["database_url"]`; otherwise the application settings apply.
+"""
 
 import asyncio
 from logging.config import fileConfig
@@ -14,10 +18,11 @@ from app.models import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep existing loggers active when migrations run inside another process, e.g. pytest.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
-database_url = build_database_url(get_settings())
+database_url = config.attributes.get("database_url") or build_database_url(get_settings())
 
 
 def run_migrations_offline() -> None:
