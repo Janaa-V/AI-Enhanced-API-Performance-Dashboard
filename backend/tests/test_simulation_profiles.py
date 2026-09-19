@@ -5,8 +5,21 @@ import pytest
 from app.services.simulation import DEFAULT_PROFILES, EndpointProfile
 
 
-def test_default_profiles_cover_the_five_demo_endpoints() -> None:
-    assert set(DEFAULT_PROFILES) == {"users", "products", "orders", "search", "reports"}
+def test_default_profiles_cover_the_demo_endpoints() -> None:
+    assert set(DEFAULT_PROFILES) == {
+        "users",
+        "products",
+        "orders",
+        "search",
+        "reports",
+        "orders_create",
+    }
+
+
+def test_writes_are_slower_and_less_reliable_than_reads() -> None:
+    read, write = DEFAULT_PROFILES["orders"], DEFAULT_PROFILES["orders_create"]
+    assert write.max_latency_ms > read.max_latency_ms
+    assert write.failure_rate > read.failure_rate
 
 
 def test_reports_are_the_slowest_and_least_reliable() -> None:

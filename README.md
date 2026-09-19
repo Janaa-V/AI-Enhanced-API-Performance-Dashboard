@@ -58,7 +58,8 @@ No model is trained or hosted. The backend sends a structured summary of recent 
 | Request model and migration | Done |
 | Simulation engine (latency and failure profiles) | Done |
 | Demo routes (`GET /demo/*`) | Done |
-| `POST /demo/orders` and request logging | Planned |
+| `POST /demo/orders` (validated create) | Done |
+| Request logging middleware | Planned |
 | `/metrics` API | Planned |
 | Traffic generator for demos | Planned |
 | React dashboard | Planned |

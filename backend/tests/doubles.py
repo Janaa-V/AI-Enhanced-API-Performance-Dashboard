@@ -1,6 +1,8 @@
 """Test stand-ins for randomness and time, shared by the simulation and route tests."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+
+from fastapi.testclient import TestClient
 
 
 class ScriptedRandom:
@@ -28,3 +30,6 @@ class FakeSleep:
 
     async def __call__(self, seconds: float) -> None:
         self.delays.append(seconds)
+
+
+MakeClient = Callable[..., tuple[TestClient, FakeSleep]]

@@ -32,5 +32,7 @@ DEFAULT_PROFILES: Mapping[str, EndpointProfile] = MappingProxyType(
         "orders": EndpointProfile(60, 250, 0.05, (500, 503)),
         "search": EndpointProfile(80, 400, 0.03, (503, 504)),
         "reports": EndpointProfile(400, 1500, 0.08, (504, 500)),
+        # Writes are slower and less reliable than reads.
+        "orders_create": EndpointProfile(100, 400, 0.06, (500, 503)),
     }
 )

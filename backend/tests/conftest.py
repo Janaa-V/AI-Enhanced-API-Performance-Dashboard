@@ -5,17 +5,23 @@ migrated once per test session, and emptied before every test. It is never the
 development database.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from unittest.mock import AsyncMock
 
 import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from psycopg import sql
 from sqlalchemy import text
 
+from app.api.dependencies import get_simulator
 from app.config import BACKEND_ROOT, Settings
 from app.database import Database, build_database_url
+from app.main import create_app
+from app.services.simulation import Simulator
+from tests.doubles import FakeSleep, MakeClient, ScriptedRandom
 
 
 def _ensure_database_exists(settings: Settings) -> None:
@@ -80,3 +86,26 @@ async def db(migrated_database: Settings) -> AsyncIterator[Database]:
         yield database
     finally:
         await database.close()
+
+
+@pytest.fixture
+def make_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[MakeClient]:
+    """Build an app whose simulator uses scripted dice and a fake clock."""
+    monkeypatch.setattr("app.main.Database", lambda settings: AsyncMock())
+    clients: list[TestClient] = []
+
+    def make(*, roll: float = 0.999, latency_fraction: float = 0.5) -> tuple[TestClient, FakeSleep]:
+        sleep = FakeSleep()
+        simulator = Simulator(
+            rng=ScriptedRandom(latency_fraction=latency_fraction, roll=roll), sleep=sleep
+        )
+        application = create_app()
+        application.dependency_overrides[get_simulator] = lambda: simulator
+        client = TestClient(application)
+        client.__enter__()
+        clients.append(client)
+        return client, sleep
+
+    yield make
+    for client in clients:
+        client.__exit__(None, None, None)
