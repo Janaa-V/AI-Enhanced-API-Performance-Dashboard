@@ -21,7 +21,7 @@ from app.config import BACKEND_ROOT, Settings
 from app.database import Database, build_database_url
 from app.main import create_app
 from app.services.simulation import Simulator
-from tests.doubles import FakeSleep, MakeClient, ScriptedRandom
+from tests.doubles import FakeSleep, InMemoryRecorder, MakeClient, ScriptedRandom
 
 
 def _ensure_database_exists(settings: Settings) -> None:
@@ -92,6 +92,7 @@ async def db(migrated_database: Settings) -> AsyncIterator[Database]:
 def make_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[MakeClient]:
     """Build an app whose simulator uses scripted dice and a fake clock."""
     monkeypatch.setattr("app.main.Database", lambda settings: AsyncMock())
+    monkeypatch.setattr("app.main.RequestRecorder", lambda sessions: InMemoryRecorder())
     clients: list[TestClient] = []
 
     def make(*, roll: float = 0.999, latency_fraction: float = 0.5) -> tuple[TestClient, FakeSleep]:

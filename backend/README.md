@@ -7,7 +7,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | Milestone | Scope | State |
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
-| 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service and the logging middleware (built and tested; not yet wired into the app) | In progress |
+| 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
@@ -170,6 +170,7 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
   - Latency uses a monotonic clock and ends when the final response chunk is sent, so the database write never counts. The row is saved after the response has been sent.
   - An unhandled crash is recorded as a `500` and re-raised unchanged. That save runs as a background task, because waiting would delay the `500` the outer layer is about to send. A client disconnect or a cancelled request is not recorded.
   - The recorder, the clock and the wall-clock time are injected, so tests need no database and no real waiting. A failing recorder can never break a request or hide the original error.
+  - Wiring (`app/main.py`): the recorder is created at startup from the database's sessions and cleared at shutdown, and the middleware finds it on the app state. Before startup or after shutdown nothing is recorded and nothing breaks.
 - Each endpoint has a profile in `app/services/simulation/profiles.py`: a latency range, a failure probability and the server-error codes a failure chooses from. Latency is uniform within the range; a failing request still waits its full time first, like a real timeout.
 - `Simulator` (`simulator.py`) separates the decision from the side effects: `plan(profile)` is a pure function that returns the delay and outcome, and `simulate(profile)` waits and raises. It takes any profile, and receives its random generator and sleep function as parameters, so tests force any outcome and never wait in real time.
 - Two settings scale every profile (`SIMULATION_LATENCY_SCALE`, `SIMULATION_FAILURE_SCALE`), for example failures off for a quiet demo.
@@ -183,6 +184,17 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 | `search` | 80–400 ms | 3% | 503, 504 |
 | `reports` | 400–1500 ms | 8% | 504, 500 |
 | `orders_create` (`POST /demo/orders`) | 100–400 ms | 6% | 500, 503 |
+
+### What a recorded request looks like
+
+Checked on the real server with `curl`: one row per demo call; `/health`, `/docs` and unknown paths add none; the query string is never stored.
+
+| id | method | endpoint | status_code | latency_ms | started_at (UTC) |
+| --- | --- | --- | --- | --- | --- |
+| 1 | GET | `/demo/users` | 200 | 58.6 | 21:01:32.395 |
+| 5 | GET | `/demo/reports` | 200 | 1340.3 | 21:01:32.704 |
+| 6 | POST | `/demo/orders` | 201 | 288.1 | 21:01:34.074 |
+| 7 | POST | `/demo/orders` | 422 | 1.0 | 21:01:34.372 |
 
 ## Testing
 
