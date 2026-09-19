@@ -7,12 +7,13 @@ The GitHub Actions workflow is [Backend CI](../.github/workflows/backend-ci.yml)
 | Check | Behavior |
 | --- | --- |
 | Backend quality | Ruff lint, formatting, and Pyright |
-| Backend unit tests | pytest on Python 3.12, 3.13, and 3.14 |
+| Backend unit tests | pytest on Python 3.12, 3.13, and 3.14, without a database |
+| Backend integration tests | pytest against a PostgreSQL 18 service container: migrations, constraints, and model/migration drift |
 | Backend dependency audit | pip-audit checks installed runtime and development dependencies |
 | Repository secret scan | Gitleaks scans fetched Git history with findings redacted |
 | Backend CI passed | Succeeds only when all preceding jobs succeed |
 
-No PostgreSQL service, database connection check, AI credentials, or deployment secrets are used. Current tests construct connection configuration or mock database behavior without connecting. Keep future database integration tests separate from this unit-test suite.
+Unit tests run without a database or credentials. Integration tests are separate (`pytest -m integration`) and use a throwaway PostgreSQL service container with trust authentication, so CI holds no database secret. No AI credentials or deployment secrets are used.
 
 Jobs install dependencies using `uv sync --locked`. CI pins uv and external action revisions, caches dependencies using the lockfile, uses read-only repository permissions, disables persisted checkout credentials, sets timeouts, and cancels superseded runs. Gitleaks is pinned and its release archive is checked against the published release checksum. Fork pull requests execute without privileged deployment credentials.
 
@@ -23,6 +24,7 @@ From `backend/`:
 ```bash
 make sync
 make check
+make test-integration   # needs the local PostgreSQL container
 make audit
 make pre-commit
 ```
@@ -40,6 +42,6 @@ The manual trigger is normally discoverable in GitHub's Actions UI after the wor
 
 ## Later validation and deployment
 
-CI does not currently validate PostgreSQL queries or migrations. Verify them against a separate local test database when those features are introduced.
+Integration tests validate the schema and migrations against PostgreSQL. Tests of query results are added together with the metrics feature.
 
 Deployment automation follows the hosting decision. Plan separate staging/production environments, environment-scoped credentials, a tested immutable artifact, controlled migrations, post-deployment health checks, serialized deployment jobs, and a rollback procedure. This workflow does not deploy the application.

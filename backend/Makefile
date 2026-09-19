@@ -6,7 +6,7 @@ UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && ec
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test migrate migration clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration migrate migration clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
@@ -23,7 +23,8 @@ help:
 	  '  make format-check        Check formatting with Ruff' \
 	  '  make typecheck           Run static type checks with Pyright' \
 	  '  make audit               Audit dependencies for CVEs with pip-audit' \
-	  '  make test                Run backend tests with pytest' \
+	  '  make test                Run unit tests (no database needed)' \
+	  '  make test-integration    Run tests against the PostgreSQL test database' \
 	  '  make migrate             Apply database migrations (alembic upgrade head)' \
 	  '  make migration MSG=text  Generate a migration from model changes; review it' \
 	  '  make pre-commit          Run pre-commit hooks on all files' \
@@ -89,6 +90,9 @@ check: lint format-check typecheck test
 
 test: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run pytest
+
+test-integration: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pytest -m integration
 
 migrate: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run alembic upgrade head

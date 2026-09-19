@@ -31,7 +31,8 @@ make run              # API on http://127.0.0.1:8000, docs at /docs
 | Command | Purpose |
 | --- | --- |
 | `make check` | Lint, format check, type check and tests |
-| `make test` | pytest (unit tests mock the database) |
+| `make test` | Unit tests; they mock the database and need no PostgreSQL |
+| `make test-integration` | Tests against a real PostgreSQL test database |
 | `make migrate` | Apply database migrations |
 | `make migration MSG="..."` | Generate a migration from model changes; always review it |
 | `make format` | Format with Ruff |
@@ -82,6 +83,7 @@ Settings are validated at startup by `app/config.py` (Pydantic). Values come fro
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | `127.0.0.1`, `5432`, `performance_dashboard`, `dashboard` | PostgreSQL connection |
+| `TEST_DB_NAME` | `performance_dashboard_test` | Database used by integration tests; emptied on every run, so it must end in `_test` |
 | `DB_PASSWORD` | none, required | Database password; kept separate from the URL so special characters need no escaping |
 | `CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed browser origins, as a JSON array |
 | `METRICS_WINDOW_MINUTES` | `60` | Default reporting window, 1–1440 |
@@ -147,10 +149,17 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 | Layer | Approach |
 | --- | --- |
 | Connection lifecycle, `/health` | Unit tests with a mocked database; no PostgreSQL, credentials or network needed. These run in CI. |
-| Request logging, metrics queries | Integration tests against an isolated PostgreSQL test database with migrations applied, marked separately from unit tests *(planned)* |
+| Schema, migrations, request logging, metrics queries | Integration tests (`make test-integration`) against a separate PostgreSQL test database |
 | AI provider | Mocked responses covering timeouts, rate limits, malformed output and missing configuration *(planned)* |
 
 Queries need a real PostgreSQL because time binning, `TIMESTAMPTZ` and boundary behaviour are database behaviour that a mock cannot verify.
+
+How the integration tests work:
+
+- **Separate database.** They use the database named by `TEST_DB_NAME` (default `performance_dashboard_test`, changeable in `.env` or the environment, and required to end in `_test`), created automatically on first run. Development data is never touched.
+- **Migrated once, emptied per test.** The migrations run once per test session; each test starts by truncating the tables. Truncating, rather than rolling back a transaction, lets the tests exercise code that commits its own transactions, such as the request-logging middleware.
+- **Opt-in.** Plain `pytest` skips them, so `make test` works without a database. They fail with a clear message if PostgreSQL is unreachable.
+- **What they check now:** the database rejects invalid rows, `TIMESTAMPTZ` preserves the instant, migrations can be reversed and reapplied, and the models still match the migrated schema, so a model change without a migration fails the build.
 
 ## Structure
 
