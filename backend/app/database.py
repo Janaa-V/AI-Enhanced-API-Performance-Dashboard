@@ -9,20 +9,24 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import Settings
 
 
+def build_database_url(settings: Settings) -> URL:
+    """Build the connection URL; shared by the application and Alembic migrations."""
+    if not settings.db_password.get_secret_value():
+        raise ValueError("Set DB_PASSWORD in backend/.env before starting the backend.")
+    return URL.create(
+        "postgresql+psycopg",
+        username=settings.db_user,
+        password=settings.db_password.get_secret_value(),
+        host=settings.db_host,
+        port=settings.db_port,
+        database=settings.db_name,
+    )
+
+
 class Database:
     def __init__(self, settings: Settings) -> None:
-        if not settings.db_password.get_secret_value():
-            raise ValueError("Set DB_PASSWORD in backend/.env before starting the backend.")
-        url = URL.create(
-            "postgresql+psycopg",
-            username=settings.db_user,
-            password=settings.db_password.get_secret_value(),
-            host=settings.db_host,
-            port=settings.db_port,
-            database=settings.db_name,
-        )
         self.engine = create_async_engine(
-            url, pool_pre_ping=True, connect_args={"connect_timeout": 5}
+            build_database_url(settings), pool_pre_ping=True, connect_args={"connect_timeout": 5}
         )
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
