@@ -7,7 +7,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | Milestone | Scope | State |
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
-| 2. Simulation and recording | Request model and migration (done); five `/demo/*` routes and logging middleware (planned) | In progress |
+| 2. Simulation and recording | Request model, migration and simulation engine (done); five `/demo/*` routes and logging middleware (planned) | In progress |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
@@ -87,6 +87,8 @@ Settings are validated at startup by `app/config.py` (Pydantic). Values come fro
 | `DB_PASSWORD` | none, required | Database password; kept separate from the URL so special characters need no escaping |
 | `CORS_ORIGINS` | `["http://localhost:5173"]` | Allowed browser origins, as a JSON array |
 | `METRICS_WINDOW_MINUTES` | `60` | Default reporting window, 1–1440 |
+| `SIMULATION_LATENCY_SCALE` | `1` | Multiplier for simulated delays; `0` removes them |
+| `SIMULATION_FAILURE_SCALE` | `1` | Multiplier for simulated failure rates; `0` turns failures off |
 | `AI_PROVIDER` | `disabled` | `disabled`, `gemini` or `groq` |
 | `AI_API_KEY`, `AI_MODEL` | empty | Provider credentials and model, backend-only |
 | `AI_TIMEOUT_SECONDS` | `30` | Provider timeout, above 0 and at most 120 |
@@ -141,8 +143,18 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 - Only `/demo/*` requests are recorded; `/health`, `/metrics`, `/analyze` and docs are excluded.
 - Delays use `asyncio.sleep`, so simulation never blocks other requests. Latency is measured with a monotonic clock, in milliseconds.
 - Failed responses, including simulated failures, are recorded. A logging failure is reported in application logs and never changes the endpoint's response.
-- Latency ranges and failure rates are configurable, and randomness is injectable so tests are deterministic.
-- Automatic traffic generation is off by default. A local script generates bounded, varied traffic for demos.
+- Each endpoint has a profile in `app/services/simulation/profiles.py`: a latency range, a failure probability and the server-error codes a failure chooses from. Latency is uniform within the range; a failing request still waits its full time first, like a real timeout.
+- `Simulator` (`simulator.py`) separates the decision from the side effects: `plan(profile)` is a pure function that returns the delay and outcome, and `simulate(profile)` waits and raises. It takes any profile, and receives its random generator and sleep function as parameters, so tests force any outcome and never wait in real time.
+- Two settings scale every profile (`SIMULATION_LATENCY_SCALE`, `SIMULATION_FAILURE_SCALE`), for example failures off for a quiet demo.
+- A local traffic script (planned) generates bounded, varied traffic for demos.
+
+| Endpoint | Latency | Failure rate | Failure statuses |
+| --- | --- | --- | --- |
+| `users` | 20–80 ms | 2% | 500, 503 |
+| `products` | 30–120 ms | 1% | 500 |
+| `orders` | 60–250 ms | 5% | 500, 503 |
+| `search` | 80–400 ms | 3% | 503, 504 |
+| `reports` | 400–1500 ms | 8% | 504, 500 |
 
 ## Testing
 
@@ -170,6 +182,9 @@ backend/
 │   ├── config.py                  Validated settings
 │   ├── database.py                Async engine and per-request sessions
 │   ├── models.py                  SQLAlchemy models (request_logs)
+│   ├── services/simulation/       Simulated latency and failures
+│   │   ├── profiles.py            Per-endpoint behaviour (data)
+│   │   └── simulator.py           Decision (plan) and side effects (simulate)
 │   └── api/routers/health.py
 ├── migrations/                    Alembic revisions (schema history)
 ├── tests/

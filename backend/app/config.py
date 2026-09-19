@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     db_password: SecretStr = SecretStr("")
     cors_origins: list[str] = ["http://localhost:5173"]
     metrics_window_minutes: int = Field(default=60, ge=1, le=1440)
+    simulation_latency_scale: float = Field(default=1.0, ge=0, le=100)
+    simulation_failure_scale: float = Field(default=1.0, ge=0, le=100)
     ai_provider: Literal["disabled", "gemini", "groq"] = "disabled"
     ai_api_key: SecretStr = SecretStr("")
     ai_model: str = ""
