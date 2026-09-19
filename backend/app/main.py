@@ -6,9 +6,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.errors import register_error_handlers
+from app.api.routers.demo import router as demo_router
 from app.api.routers.health import router as health_router
 from app.config import get_settings
 from app.database import Database
+from app.services.simulation import Simulator
 
 
 def create_app() -> FastAPI:
@@ -18,6 +21,10 @@ def create_app() -> FastAPI:
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         database = Database(settings)
         application.state.database = database
+        application.state.simulator = Simulator(
+            latency_scale=settings.simulation_latency_scale,
+            failure_scale=settings.simulation_failure_scale,
+        )
         try:
             await database.check_connection()
             yield
@@ -31,7 +38,9 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )
+    register_error_handlers(application)
     application.include_router(health_router)
+    application.include_router(demo_router)
     return application
 
 
