@@ -7,7 +7,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | Milestone | Scope | State |
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
-| 2. Simulation and recording | Request model, migration and simulation engine (done); five `/demo/*` routes and logging middleware (planned) | In progress |
+| 2. Simulation and recording | Request model, migration, simulation engine and five `GET /demo/*` routes (done); `POST /demo/orders` and logging middleware (planned) | In progress |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
@@ -122,9 +122,27 @@ Design choices:
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health` | Readiness with a database check; `503` if the database is unavailable. Not measured. Implemented. |
-| `GET /demo/users`, `/orders`, `/products`, `/search`, `/reports` | Synthetic services, each with its own latency range and failure rate; reports are slowest. Failures return a consistent JSON error body. |
+| `GET /demo/users`, `/orders`, `/products`, `/search`, `/reports` | Synthetic services, each with its own latency range and failure rate; reports are slowest. Failures return a consistent JSON error body. Implemented. |
 | `GET /metrics` | Aggregated metrics for a time window |
 | `POST /analyze` | AI observations for a time window |
+
+### Demo routes and the error format
+
+Each route returns small fixed data and never touches the database, so the measured time is exactly the simulated time. `GET /demo/search?q=lap` filters the products by name, ignoring case, and accepts a query of at most 100 characters.
+
+A simulated failure returns one JSON shape for every route and status:
+
+```json
+{"error": {"code": "gateway_timeout", "message": "An upstream service took too long to respond."}}
+```
+
+| Status | `code` |
+| --- | --- |
+| 500 | `internal_error` |
+| 503 | `service_unavailable` |
+| 504 | `gateway_timeout` |
+
+Invalid requests (for example a `q` longer than 100 characters) get a standard `422` immediately: handlers call the simulator only after FastAPI has validated the request, so bad input is never delayed or disguised as a simulated server failure. The interactive docs at `/docs` list, for each route, exactly the failure statuses its profile allows.
 
 ### `GET /metrics`
 
@@ -182,10 +200,15 @@ backend/
 │   ├── config.py                  Validated settings
 │   ├── database.py                Async engine and per-request sessions
 │   ├── models.py                  SQLAlchemy models (request_logs)
+│   ├── schemas/                   Pydantic response models (demo, errors)
+│   ├── services/demo_data.py      Fixed fake data for the demo routes
 │   ├── services/simulation/       Simulated latency and failures
 │   │   ├── profiles.py            Per-endpoint behaviour (data)
 │   │   └── simulator.py           Decision (plan) and side effects (simulate)
-│   └── api/routers/health.py
+│   └── api/
+│       ├── dependencies.py        Shared dependencies (the simulator)
+│       ├── errors.py              One JSON error format and its handler
+│       └── routers/               health.py, demo.py
 ├── migrations/                    Alembic revisions (schema history)
 ├── tests/
 ├── pyproject.toml, uv.lock        Dependencies (locked)
@@ -193,7 +216,7 @@ backend/
 └── CI.md                          Automated checks
 ```
 
-Planned additions: `schemas.py`, `middleware/request_logging.py`, `api/routers/{demo,metrics,analysis}.py`, `services/{metrics_service,ai_analysis,ai_providers}.py`, `scripts/generate_traffic.py`.
+Planned additions: `middleware/request_logging.py`, `api/routers/{demo,metrics,analysis}.py`, `services/{metrics_service,ai_analysis,ai_providers}.py`, `scripts/generate_traffic.py`.
 
 ## Deployment assumptions
 
