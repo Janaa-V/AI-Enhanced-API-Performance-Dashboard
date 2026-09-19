@@ -7,7 +7,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | Milestone | Scope | State |
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
-| 2. Simulation and recording | Five `/demo/*` routes, request model and migration, logging middleware | Planned |
+| 2. Simulation and recording | Request model and migration (done); five `/demo/*` routes and logging middleware (planned) | In progress |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
@@ -24,6 +24,7 @@ Prerequisites: [uv](https://docs.astral.sh/uv/getting-started/installation/) and
 # 2. From backend/:
 make setup            # install dependencies, create .env if missing
 # 3. Set DB_PASSWORD in .env to match the PostgreSQL container
+make migrate         # create the database tables
 make run              # API on http://127.0.0.1:8000, docs at /docs
 ```
 
@@ -31,6 +32,8 @@ make run              # API on http://127.0.0.1:8000, docs at /docs
 | --- | --- |
 | `make check` | Lint, format check, type check and tests |
 | `make test` | pytest (unit tests mock the database) |
+| `make migrate` | Apply database migrations |
+| `make migration MSG="..."` | Generate a migration from model changes; always review it |
 | `make format` | Format with Ruff |
 | `make audit` | Scan dependencies for known vulnerabilities |
 | `make pre-commit-install` | Install Git hooks (Ruff, gitleaks, key detection) |
@@ -91,18 +94,24 @@ Settings are validated at startup by `app/config.py` (Pydantic). Values come fro
 
 ## Data model
 
-One table, `request_logs`, created by an Alembic migration (never implicitly at startup):
+One table, `request_logs`, defined in `app/models.py` and created by an Alembic migration (never implicitly at startup). Every column is `NOT NULL`.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | bigint identity | Primary key |
-| `endpoint` | text | Normalised route path, no query string, body or credentials |
-| `method` | text | HTTP method |
-| `status_code` | integer | Response status |
-| `latency_ms` | double precision | Non-negative check constraint |
-| `timestamp` | `TIMESTAMPTZ` | Stored in UTC |
+| `endpoint` | text | Route template such as `/demo/users`; never the query string, body or credentials |
+| `method` | text | HTTP method, validated by the application |
+| `status_code` | smallint | Check: between 100 and 599 |
+| `latency_ms` | double precision | Measured with a monotonic clock; check: at least 0 |
+| `started_at` | `TIMESTAMPTZ` | Request start, stored in UTC |
 
-Indexes: `timestamp`, and `(endpoint, timestamp)`.
+Design choices:
+
+- **Start plus duration, no end column.** The end time is `started_at + latency_ms`. Storing it too would duplicate one fact, and a wall-clock end time could disagree with the monotonic-clock latency. If a feature needs it, compute it in a query.
+- **Constraints in the database.** Invalid values are rejected by PostgreSQL itself, whatever code writes them.
+- **One index, on `started_at`.** Every metrics query filters by time window. An `(endpoint, started_at)` index is deliberately left out until a query plan shows it is needed, because each index slows every insert.
+- **Named constraints.** A naming convention gives constraints and indexes predictable names, which keeps migrations reviewable.
+- **Out of scope for now:** partitioning, rollup tables and extra columns such as an error flag or request ID; each can be added later with a migration.
 
 ## API design
 
@@ -119,7 +128,7 @@ Query parameters: `window_minutes` (default 60, 1–1440), `bucket_minutes` (def
 
 Response: `window` (UTC start, end, bucket size), `summary` (total requests, errors, error rate, average latency, requests per minute), `endpoints` (the same per endpoint and method), `status_codes`, `latency_trend` (time buckets, overall and per endpoint) and `recent_requests` (newest first, ID as tie-breaker).
 
-Rules: filtering uses the half-open interval `[start, end)` with edge buckets clipped. Empty windows return zero counts, empty arrays, and null averages. Overall averages come from totals, not from averaging endpoint averages. Errors are HTTP status 400 and above.
+Rules: rows are placed in windows and buckets by `started_at`. Filtering uses the half-open interval `[start, end)` with edge buckets clipped. Empty windows return zero counts, empty arrays, and null averages. Overall averages come from totals, not from averaging endpoint averages. Errors are HTTP status 400 and above.
 
 ### `POST /analyze`
 
@@ -151,14 +160,16 @@ backend/
 │   ├── main.py                    App factory, lifespan, CORS, routers
 │   ├── config.py                  Validated settings
 │   ├── database.py                Async engine and per-request sessions
+│   ├── models.py                  SQLAlchemy models (request_logs)
 │   └── api/routers/health.py
+├── migrations/                    Alembic revisions (schema history)
 ├── tests/
 ├── pyproject.toml, uv.lock        Dependencies (locked)
 ├── Makefile                       Developer commands
 └── CI.md                          Automated checks
 ```
 
-Planned additions: `models.py`, `schemas.py`, `middleware/request_logging.py`, `api/routers/{demo,metrics,analysis}.py`, `services/{metrics_service,ai_analysis,ai_providers}.py`, `migrations/`, `scripts/generate_traffic.py`.
+Planned additions: `schemas.py`, `middleware/request_logging.py`, `api/routers/{demo,metrics,analysis}.py`, `services/{metrics_service,ai_analysis,ai_providers}.py`, `scripts/generate_traffic.py`.
 
 ## Deployment assumptions
 
