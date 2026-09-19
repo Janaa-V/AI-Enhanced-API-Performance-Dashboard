@@ -6,7 +6,7 @@ UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && ec
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test migrate migration clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
@@ -24,6 +24,8 @@ help:
 	  '  make typecheck           Run static type checks with Pyright' \
 	  '  make audit               Audit dependencies for CVEs with pip-audit' \
 	  '  make test                Run backend tests with pytest' \
+	  '  make migrate             Apply database migrations (alembic upgrade head)' \
+	  '  make migration MSG=text  Generate a migration from model changes; review it' \
 	  '  make pre-commit          Run pre-commit hooks on all files' \
 	  '  make pre-commit-install  Install pre-commit Git hooks' \
 	  '  make clean-logs          Delete backend .log and numbered rotated log files' \
@@ -87,6 +89,13 @@ check: lint format-check typecheck test
 
 test: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run pytest
+
+migrate: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run alembic upgrade head
+
+migration: check-uv
+	@test -n "$(MSG)" || { printf '%s\n' 'Usage: make migration MSG="describe the change"' >&2; exit 1; }
+	cd "$(BACKEND_DIR)" && "$(UV)" run alembic revision --autogenerate -m "$(MSG)"
 
 clean-logs:
 	@find "$(BACKEND_DIR)" -type d \( -name .venv -o -name .git -o -name node_modules \) -prune -o \
