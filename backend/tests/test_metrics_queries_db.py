@@ -1,12 +1,20 @@
-"""Verify the summary, per-endpoint and status-code aggregates against real PostgreSQL."""
+"""Verify every /metrics query against real PostgreSQL."""
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import text
 
 from app.database import Database
 from app.models import RequestLog
-from app.services.metrics import TimeWindow, endpoint_metrics, status_codes, summary
+from app.services.metrics import (
+    TimeWindow,
+    endpoint_metrics,
+    latency_trend,
+    recent_requests,
+    status_codes,
+    summary,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -126,3 +134,108 @@ async def test_status_codes_are_counted_in_ascending_order(db: Database) -> None
     async with db.sessions() as session:
         counts = await status_codes(session, WINDOW)
     assert [(c.status_code, c.count) for c in counts] == [(200, 3), (422, 1), (503, 2)]
+
+
+# Latency trend: a window of 09:02:37 to 10:02:37 in 5-minute buckets, 13 in all.
+TREND_WINDOW = TimeWindow(
+    start=datetime(2026, 9, 27, 9, 2, 37, tzinfo=UTC),
+    end=datetime(2026, 9, 27, 10, 2, 37, tzinfo=UTC),
+)
+FIVE_MINUTES = timedelta(minutes=5)
+
+
+def clock(minute: int, second: int = 0, microsecond: int = 0) -> datetime:
+    return datetime(2026, 9, 27, 9, 0, tzinfo=UTC) + timedelta(
+        minutes=minute, seconds=second, microseconds=microsecond
+    )
+
+
+async def test_rows_on_bucket_edges_land_where_python_expects(db: Database) -> None:
+    await add(
+        db,
+        log(at=clock(4, 59, 999_999), latency=10),  # last instant of the clipped first bucket
+        log(at=clock(5), latency=20),  # first instant of the second bucket
+        log(at=clock(60), latency=30),  # 10:00, the clipped last bucket
+    )
+    async with db.sessions() as session:
+        trend = await latency_trend(session, TREND_WINDOW, FIVE_MINUTES)
+    buckets = trend.overall
+    assert len(buckets) == 13
+    assert (buckets[0].start, buckets[0].end) == (TREND_WINDOW.start, clock(5))
+    assert (buckets[-1].start, buckets[-1].end) == (clock(60), TREND_WINDOW.end)
+    assert [
+        (b.total_requests, b.avg_latency_ms) for b in (buckets[0], buckets[1], buckets[-1])
+    ] == [
+        (1, 10),
+        (1, 20),
+        (1, 30),
+    ]
+    assert (buckets[2].total_requests, buckets[2].p95_latency_ms) == (0, None)
+
+
+async def test_the_overall_p95_is_computed_from_rows_not_from_endpoint_p95s(db: Database) -> None:
+    # 20 rows in one bucket: overall p95 is between 108 and 109 at position 18.05 (108.05);
+    # the reports endpoint alone has p95 108.55, and users far less.
+    await add(
+        db,
+        *(log(at=clock(10), endpoint="/demo/users", latency=ms) for ms in range(1, 11)),
+        *(log(at=clock(10), endpoint="/demo/reports", latency=ms) for ms in range(100, 110)),
+    )
+    async with db.sessions() as session:
+        trend = await latency_trend(session, TREND_WINDOW, FIVE_MINUTES)
+    bucket = trend.overall[2]
+    assert bucket.start == clock(10)
+    assert bucket.p95_latency_ms == pytest.approx(108.05)
+    reports = trend.by_endpoint[0]
+    assert reports.endpoint == "/demo/reports"
+    assert reports.buckets[2].p95_latency_ms == pytest.approx(108.55)
+
+
+async def test_each_endpoint_gets_every_bucket_in_the_table_order(db: Database) -> None:
+    await add(
+        db,
+        log(at=clock(10), endpoint="/demo/users"),
+        log(at=clock(20), method="POST", endpoint="/demo/orders", status=201),
+        log(at=clock(30), endpoint="/demo/orders"),
+    )
+    async with db.sessions() as session:
+        trend = await latency_trend(session, TREND_WINDOW, FIVE_MINUTES)
+        table = await endpoint_metrics(session, TREND_WINDOW)
+    assert [(t.endpoint, t.method) for t in trend.by_endpoint] == [
+        (e.endpoint, e.method) for e in table
+    ]
+    assert all(len(t.buckets) == 13 for t in trend.by_endpoint)
+    post_orders = trend.by_endpoint[1]
+    assert [b.total_requests for b in post_orders.buckets].count(1) == 1
+
+
+async def test_an_empty_window_has_every_bucket_and_no_endpoints(db: Database) -> None:
+    async with db.sessions() as session:
+        trend = await latency_trend(session, TREND_WINDOW, FIVE_MINUTES)
+    assert len(trend.overall) == 13
+    assert all(b.total_requests == 0 and b.avg_latency_ms is None for b in trend.overall)
+    assert trend.by_endpoint == []
+
+
+async def test_recent_requests_are_newest_first_with_id_breaking_ties(db: Database) -> None:
+    await add(
+        db,
+        log(at=WINDOW.start - TICK, endpoint="/demo/outside-before"),
+        log(at=MIDDLE, endpoint="/demo/first"),
+        log(at=MIDDLE, endpoint="/demo/second"),  # same time, higher id
+        log(at=END - TICK, endpoint="/demo/newest"),
+        log(at=END, endpoint="/demo/outside-after"),
+    )
+    async with db.sessions() as session:
+        recent = await recent_requests(session, WINDOW, limit=10)
+        limited = await recent_requests(session, WINDOW, limit=2)
+    assert [r.endpoint for r in recent] == ["/demo/newest", "/demo/second", "/demo/first"]
+    assert [r.endpoint for r in limited] == ["/demo/newest", "/demo/second"]
+
+
+async def test_recent_request_times_are_utc_whatever_the_database_time_zone(db: Database) -> None:
+    await add(db, log(at=MIDDLE))
+    async with db.sessions() as session:
+        await session.execute(text("SET TIME ZONE 'Asia/Kolkata'"))
+        (recent,) = await recent_requests(session, WINDOW, limit=1)
+    assert recent.model_dump(mode="json")["started_at"] == "2026-09-27T09:30:00Z"

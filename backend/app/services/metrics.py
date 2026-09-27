@@ -4,15 +4,24 @@ Every query reads the half-open window [start, end) and runs in the caller's ses
 so the router can run them all in one snapshot transaction.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import ColumnElement, Row, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import RequestLog
-from app.schemas.metrics import EndpointMetrics, StatusCodeCount, Summary
+from app.schemas.metrics import (
+    EndpointMetrics,
+    EndpointTrend,
+    LatencyTrend,
+    RecentRequest,
+    StatusCodeCount,
+    Summary,
+    TrendBucket,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +54,20 @@ STATS_COLUMNS = (
     func.avg(RequestLog.latency_ms).label("avg_latency_ms"),
     func.percentile_cont(0.95).within_group(RequestLog.latency_ms).label("p95_latency_ms"),
 )
+
+
+EMPTY_STATS: Mapping[str, Any] = {
+    "total_requests": 0,
+    "server_errors": 0,
+    "client_errors": 0,
+    "error_rate": None,
+    "avg_latency_ms": None,
+    "p95_latency_ms": None,
+}
+
+# Buckets are aligned to this instant, so boundaries fall on round UTC times (10:00, 10:05)
+# and stay put between refreshes. SQL's date_bin and bucket_starts() must both use it.
+BUCKET_ORIGIN = datetime(2000, 1, 1, tzinfo=UTC)
 
 
 def in_window(window: TimeWindow) -> tuple[ColumnElement[bool], ...]:
@@ -99,4 +122,97 @@ async def status_codes(session: AsyncSession, window: TimeWindow) -> list[Status
     return [
         StatusCodeCount(status_code=row.status_code, count=row.occurrences)
         for row in await session.execute(statement)
+    ]
+
+
+def bucket_starts(window: TimeWindow, bucket: timedelta) -> list[datetime]:
+    """The aligned start of every bucket that overlaps the window, oldest first.
+
+    The first start can be before window.start; fill_buckets clips it.
+    """
+    if bucket <= timedelta(0):
+        raise ValueError("Bucket size must be positive.")
+    current = window.start - (window.start - BUCKET_ORIGIN) % bucket
+    starts: list[datetime] = []
+    while current < window.end:
+        starts.append(current)
+        current += bucket
+    return starts
+
+
+def fill_buckets(
+    window: TimeWindow, bucket: timedelta, rows: Mapping[datetime, Row[Any]]
+) -> list[TrendBucket]:
+    """One TrendBucket per bucket in the window: stats where SQL found rows, empty elsewhere."""
+    starts = bucket_starts(window, bucket)
+    # SQL and Python must agree on the buckets; if they drift, fail loudly rather than drop data.
+    unknown = rows.keys() - set(starts)
+    if unknown:
+        raise RuntimeError(f"Database buckets {sorted(unknown)} are not in the window's buckets.")
+    return [
+        TrendBucket.model_validate(
+            {
+                **(stats_fields(rows[start]) if start in rows else EMPTY_STATS),
+                "start": max(start, window.start),  # edge buckets are clipped to the window
+                "end": min(start + bucket, window.end),
+            }
+        )
+        for start in starts
+    ]
+
+
+async def latency_trend(
+    session: AsyncSession, window: TimeWindow, bucket: timedelta
+) -> LatencyTrend:
+    bucket_start = func.date_bin(bucket, RequestLog.started_at, BUCKET_ORIGIN).label("bucket_start")
+
+    # Two queries, because percentiles do not add up: the overall p95 cannot be
+    # derived from per-endpoint p95s.
+    overall = await session.execute(
+        select(bucket_start, *STATS_COLUMNS).where(*in_window(window)).group_by(bucket_start)
+    )
+    per_endpoint = await session.execute(
+        select(RequestLog.method, RequestLog.endpoint, bucket_start, *STATS_COLUMNS)
+        .where(*in_window(window))
+        .group_by(RequestLog.endpoint, RequestLog.method, bucket_start)
+        .order_by(RequestLog.endpoint, RequestLog.method)
+    )
+
+    # Dicts keep insertion order, so endpoints stay in the same order as endpoint_metrics.
+    endpoint_rows: dict[tuple[str, str], dict[datetime, Row[Any]]] = {}
+    for row in per_endpoint:
+        endpoint_rows.setdefault((row.endpoint, row.method), {})[row.bucket_start] = row
+
+    return LatencyTrend(
+        overall=fill_buckets(window, bucket, {row.bucket_start: row for row in overall}),
+        by_endpoint=[
+            EndpointTrend(
+                method=method, endpoint=endpoint, buckets=fill_buckets(window, bucket, rows)
+            )
+            for (endpoint, method), rows in endpoint_rows.items()
+        ],
+    )
+
+
+async def recent_requests(
+    session: AsyncSession, window: TimeWindow, limit: int
+) -> list[RecentRequest]:
+    # The started_at index is read backwards and the scan stops after `limit` rows.
+    statement = (
+        select(RequestLog)
+        .where(*in_window(window))
+        .order_by(RequestLog.started_at.desc(), RequestLog.id.desc())
+        .limit(limit)
+    )
+    return [
+        RecentRequest(
+            id=log.id,
+            method=log.method,
+            endpoint=log.endpoint,
+            status_code=log.status_code,
+            latency_ms=log.latency_ms,
+            # PostgreSQL returns times in the session's time zone; the contract is UTC.
+            started_at=log.started_at.astimezone(UTC),
+        )
+        for log in await session.scalars(statement)
     ]

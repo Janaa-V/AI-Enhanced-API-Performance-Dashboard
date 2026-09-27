@@ -155,14 +155,16 @@ Response (models in `app/schemas/metrics.py`): `window` (UTC start, end, window 
 
 Rules:
 
-- **Windows and buckets.** Rows are placed by `started_at`. Filtering uses the half-open interval `[start, end)`; every bucket is listed, empty ones included, and edge buckets are clipped to the window.
+- **Windows and buckets.** Rows are placed by `started_at`. Filtering uses the half-open interval `[start, end)`. Buckets are aligned to round UTC times (10:00, 10:05), not to the window start, so their boundaries stay put between refreshes; the first and last buckets are clipped to the window and can be shorter. Every bucket is listed, empty ones included, for the overall trend and for each endpoint that has requests in the window.
 - **Errors are 5xx.** `error_rate` is server errors divided by total requests. Client errors (4xx, such as a `422` for an invalid order) are counted separately, because a bad request is not the service failing.
 - **Latency.** Milliseconds as unrounded numbers; the client rounds for display. p95 is interpolated (`percentile_cont`); p99 is left out because small windows make it noisy. Overall figures come from the rows, never from averaging per-endpoint figures.
 - **Empty data.** Counts are `0` and lists are empty; `error_rate`, average and p95 are `null`, never `0`, since there is nothing to measure. These fields are always present, so generated client types read `number | null`.
 - **Formats.** Timestamps are ISO 8601 UTC with a `Z` suffix; rates are fractions from 0 to 1; lists are arrays of objects rather than objects keyed by name.
 - **One snapshot.** The window end is fixed once per request and all queries run in one `REPEATABLE READ` transaction, so a row saved mid-request cannot make the per-endpoint totals disagree with the summary.
 
-The queries live in `app/services/metrics.py`. Each takes the caller's session and a `TimeWindow` (timezone-aware bounds, computed in Python so tests can fix the clock), and the statistics columns are defined once and reused by every query. Built so far: summary, per-endpoint statistics and status codes.
+The queries live in `app/services/metrics.py`. Each takes the caller's session and a `TimeWindow` (timezone-aware bounds, computed in Python so tests can fix the clock), and the statistics columns are defined once and reused by every query. Built so far: summary, per-endpoint statistics, status codes, latency trend and recent requests.
+
+The trend groups rows with PostgreSQL's `date_bin`, which returns only buckets that have rows; a pure Python function lists every bucket in the window and fills the empty ones. Both use the same origin constant, and a database bucket that the Python list lacks raises an error instead of being dropped. The overall trend is a separate query from the per-endpoint one, because percentiles cannot be combined: the overall p95 is not derivable from per-endpoint p95s. Recent requests are read newest first through the `started_at` index and converted to UTC, whatever the database session's time zone.
 
 ### `POST /analyze`
 
