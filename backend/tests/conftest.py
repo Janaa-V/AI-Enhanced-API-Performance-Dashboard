@@ -6,8 +6,10 @@ development database.
 """
 
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
+import httpx2
 import psycopg
 import pytest
 from alembic import command
@@ -17,7 +19,7 @@ from psycopg import sql
 from sqlalchemy import text
 
 from app.api.dependencies import get_simulator
-from app.config import BACKEND_ROOT, Settings
+from app.config import BACKEND_ROOT, Settings, get_settings
 from app.database import Database, build_database_url
 from app.main import create_app
 from app.services.simulation import Simulator
@@ -110,3 +112,21 @@ def make_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[MakeClient]:
     yield make
     for client in clients:
         client.__exit__(None, None, None)
+
+
+@pytest.fixture
+def running_app(migrated_database: Settings, monkeypatch: pytest.MonkeyPatch):
+    """Start the real app (lifespan included) against the test database; yield (app, client)."""
+
+    @asynccontextmanager
+    async def start(**overrides: object):
+        settings = migrated_database.model_copy(update=overrides)
+        monkeypatch.setattr("app.main.get_settings", lambda: settings)
+        application = create_app()
+        application.dependency_overrides[get_settings] = lambda: settings
+        async with application.router.lifespan_context(application):
+            transport = httpx2.ASGITransport(app=application)
+            async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
+                yield application, client
+
+    return start

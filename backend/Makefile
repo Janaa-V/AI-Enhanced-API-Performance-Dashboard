@@ -6,7 +6,7 @@ UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && ec
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration migrate migration clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration migrate migration traffic backfill clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
@@ -27,6 +27,8 @@ help:
 	  '  make test-integration    Run tests against the PostgreSQL test database' \
 	  '  make migrate             Apply database migrations (alembic upgrade head)' \
 	  '  make migration MSG=text  Generate a migration from model changes; review it' \
+  '  make traffic             Send live demo traffic to the running backend' \
+  '  make backfill HOURS=24   Write synthetic past rows (invented, not measured)' \
 	  '  make pre-commit          Run pre-commit hooks on all files' \
 	  '  make pre-commit-install  Install pre-commit Git hooks' \
 	  '  make clean-logs          Delete backend .log and numbered rotated log files' \
@@ -34,6 +36,7 @@ help:
 	  '  make clean               Run both cleanup commands' \
 	  '' \
 	  'Overrides: make run PORT=8001 HOST=0.0.0.0' \
+  '           make traffic ARGS="--duration 300 --concurrency 10"' \
 	  '           make setup UV=/absolute/path/to/uv' \
 	  'Cleanup preserves .env, database configuration, .venv, and uv.lock.'
 
@@ -93,6 +96,12 @@ test: check-uv
 
 test-integration: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run pytest -m integration
+
+traffic: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.generate_traffic --base-url "http://$(HOST):$(PORT)" $(ARGS)
+
+backfill: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.generate_traffic --backfill-hours "$(or $(HOURS),24)" $(ARGS)
 
 migrate: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run alembic upgrade head

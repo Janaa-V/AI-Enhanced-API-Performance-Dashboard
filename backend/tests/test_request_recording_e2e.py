@@ -3,16 +3,13 @@
 import asyncio
 import logging
 import time
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
-import httpx2
 import pytest
 from sqlalchemy import select
 
 from app.config import Settings
 from app.database import Database
-from app.main import create_app
 from app.models import RequestLog
 from app.services.request_recorder import RequestRecorder
 
@@ -21,23 +18,6 @@ pytestmark = pytest.mark.integration
 QUIET = {"simulation_latency_scale": 0, "simulation_failure_scale": 0}
 ORDER = {"user_id": 1, "items": [{"product_id": 1, "quantity": 2}]}
 ORIGIN = "http://localhost:5173"
-
-
-@pytest.fixture
-def running_app(migrated_database: Settings, monkeypatch: pytest.MonkeyPatch):
-    """Start the real app (lifespan included) against the test database; yield (app, client)."""
-
-    @asynccontextmanager
-    async def start(**overrides: float):
-        settings = migrated_database.model_copy(update=overrides)
-        monkeypatch.setattr("app.main.get_settings", lambda: settings)
-        application = create_app()
-        async with application.router.lifespan_context(application):
-            transport = httpx2.ASGITransport(app=application)
-            async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
-                yield application, client
-
-    return start
 
 
 async def all_rows(db: Database) -> list[RequestLog]:

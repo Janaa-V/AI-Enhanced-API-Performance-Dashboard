@@ -9,6 +9,8 @@ from app.database import Database
 from app.models import RequestLog
 from app.services.metrics import (
     TimeWindow,
+    begin_snapshot,
+    collect_metrics,
     endpoint_metrics,
     latency_trend,
     recent_requests,
@@ -239,3 +241,40 @@ async def test_recent_request_times_are_utc_whatever_the_database_time_zone(db: 
         await session.execute(text("SET TIME ZONE 'Asia/Kolkata'"))
         (recent,) = await recent_requests(session, WINDOW, limit=1)
     assert recent.model_dump(mode="json")["started_at"] == "2026-09-27T09:30:00Z"
+
+
+SNAPSHOT_SETTINGS = text(
+    "SELECT current_setting('transaction_isolation'),"
+    " current_setting('transaction_read_only'),"
+    " current_setting('statement_timeout')"
+)
+
+
+async def test_the_snapshot_is_repeatable_read_read_only_and_time_limited(db: Database) -> None:
+    async with db.sessions() as session:
+        await begin_snapshot(session)
+        settings = (await session.execute(SNAPSHOT_SETTINGS)).one()
+    assert tuple(settings) == ("repeatable read", "on", "5s")
+
+
+async def test_a_row_saved_during_the_snapshot_is_not_seen_by_later_queries(db: Database) -> None:
+    await add(db, log())
+    async with db.sessions() as session:
+        await begin_snapshot(session)
+        before = await summary(session, WINDOW)
+        await add(db, log())  # committed by another connection, as the recorder would
+        after = await summary(session, WINDOW)
+        table = await endpoint_metrics(session, WINDOW)
+    assert before.total_requests == after.total_requests == table[0].total_requests == 1
+
+
+async def test_collect_metrics_runs_every_query_inside_the_snapshot(db: Database) -> None:
+    await add(db, log())
+    async with db.sessions() as session:
+        response = await collect_metrics(
+            session, end=END, window_minutes=60, bucket_minutes=5, recent_limit=5
+        )
+        # Still inside the transaction collect_metrics used.
+        settings = (await session.execute(SNAPSHOT_SETTINGS)).one()
+    assert tuple(settings) == ("repeatable read", "on", "5s")
+    assert response.summary.total_requests == len(response.recent_requests) == 1
