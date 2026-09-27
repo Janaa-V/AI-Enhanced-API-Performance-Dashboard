@@ -1,19 +1,19 @@
 # AI-Enhanced API Performance Dashboard
 
-A full-stack observability project: simulated API traffic is recorded in PostgreSQL and aggregated into latency, throughput and error metrics. A React dashboard and plain-English summaries from an LLM are the next steps.
+A full-stack observability project: simulated API traffic is recorded in PostgreSQL and aggregated into latency, throughput and error metrics. A React dashboard is next; plain-English summaries from an LLM are planned.
 
-> **Status: work in progress.** The backend records every demo request and the metrics queries are written; the `/metrics` endpoint, React dashboard and AI insights are still to come. See [Status](#status).
+> **Status: backend complete, frontend next.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard is next; AI insights are planned. See [Status](#status).
 
 ## Built so far
 
 - **Backend engineering:** async FastAPI, SQLAlchemy 2 with Psycopg 3, Pydantic-validated configuration, Alembic migrations.
 - **Request-level instrumentation:** simulated `/demo/*` endpoints with configurable latency and failure rates, and middleware that records endpoint, method, status code and latency for every call.
-- **Metrics in SQL:** summary, per-endpoint and status-code aggregates, plus latency trends in time buckets aligned to UTC, tested against a real PostgreSQL database.
+- **Metrics API:** `GET /metrics` returns summary, per-endpoint and status-code aggregates with p95 latency, latency trends in UTC-aligned buckets and recent requests, all read from one consistent snapshot and tested against a real PostgreSQL database. Measured at 17 ms for a one-hour window over 100,000 rows.
+- **Traffic generator:** one command sends realistic, bounded live traffic (including deliberate client errors); a separate backfill mode writes clearly labelled synthetic history.
 - **Engineering hygiene:** locked dependencies, static typing, linting, dependency audit, secret scanning, and CI that runs all of these plus unit and integration tests.
 
 ## Planned
 
-- **`/metrics` endpoint and traffic generator** to expose the aggregates and produce realistic load for demos.
 - **React dashboard:** typed React with TanStack Query and Recharts, including loading, empty and error states.
 - **AI insights:** an LLM that only ever sees server-computed aggregates, sits behind a swappable interface, and stays optional.
 
@@ -39,7 +39,7 @@ flowchart LR
 1. Five mock endpoints (users, orders, products, search, reports) respond with configurable delays and failure rates.
 2. Middleware records endpoint, method, status code, latency and timestamp for every call.
 3. `/metrics` aggregates a time window into KPIs, per-endpoint stats, status codes, latency trends and recent requests.
-4. `/analyze` sends that aggregate summary to an LLM and returns concise observations and next steps to investigate.
+4. *(Planned)* `/analyze` will send that aggregate summary to an LLM and return concise observations and next steps to investigate.
 
 ## Design decisions
 
@@ -53,9 +53,9 @@ flowchart LR
 | Metrics work without AI configured | AI is an enhancement, never a dependency |
 | Alembic migrations, no schema changes at startup | Reproducible, reviewable database changes |
 
-## AI-assisted insights
+## AI-assisted insights (planned)
 
-No model is trained or hosted. The backend sends a structured summary of recent metrics to a free-tier LLM API and asks practical questions: which endpoints are slower than expected, whether errors are concentrated in one service, what a bottleneck might look like, and what small step to try first. The prompt separates observations from hypotheses and does not claim a root cause from latency alone. The dashboard labels the output as AI-assisted analysis, not autonomous monitoring.
+Not built yet; this is the design. No model will be trained or hosted. The backend will send a structured summary of recent metrics to a free-tier LLM API and ask practical questions: which endpoints are slower than expected, whether errors are concentrated in one service, what a bottleneck might look like, and what small step to try first. The prompt will separate observations from hypotheses and will not claim a root cause from latency alone. The dashboard will label the output as AI-assisted analysis, not autonomous monitoring.
 
 ## Status
 
@@ -68,9 +68,9 @@ No model is trained or hosted. The backend sends a structured summary of recent 
 | `POST /demo/orders` (validated create) | Done |
 | Request logging middleware, wired into the app | Done |
 | `/metrics` response schemas and SQL queries (summary, per endpoint, status codes, latency trends, recent requests) | Done |
-| `/metrics` endpoint | In progress |
-| Traffic generator for demos | Planned |
-| React dashboard | Planned |
+| `/metrics` endpoint (bounded parameters, read-only snapshot, performance-checked) | Done |
+| Traffic generator for demos (live and synthetic backfill) | Done |
+| React dashboard | Next |
 | AI insights (`/analyze`) | Planned |
 | Deployment on free-tier services | Planned |
 
@@ -99,10 +99,14 @@ Requires [uv](https://docs.astral.sh/uv/) and Docker. Full instructions, includi
 
 ```bash
 cd backend
-make setup      # install dependencies, create .env
+make setup      # install dependencies, create .env (then set DB_PASSWORD)
+make migrate    # create the database tables
 make run        # http://127.0.0.1:8000/docs
+make traffic    # in a second terminal: 60 s of demo traffic
 make check      # lint, format, types, tests
 ```
+
+Then open `http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1`.
 
 ## Documentation
 
