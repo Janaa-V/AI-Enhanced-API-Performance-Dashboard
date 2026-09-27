@@ -1,18 +1,25 @@
 # AI-Enhanced API Performance Dashboard
 
-A full-stack observability project: simulated API traffic is recorded in PostgreSQL, aggregated into latency, throughput and error metrics, shown in a React dashboard, and summarised in plain English by an LLM.
+A full-stack observability project: simulated API traffic is recorded in PostgreSQL and aggregated into latency, throughput and error metrics. A React dashboard and plain-English summaries from an LLM are the next steps.
 
-> **Status: work in progress.** The backend foundation is done; recording, metrics, dashboard and AI insights are planned. See [Status](#status).
+> **Status: work in progress.** The backend records every demo request and the metrics queries are written; the `/metrics` endpoint, React dashboard and AI insights are still to come. See [Status](#status).
 
-## What it demonstrates
+## Built so far
 
-- **Backend engineering:** async FastAPI, SQLAlchemy 2 with Psycopg 3, Pydantic-validated configuration, request-level instrumentation.
-- **Observability:** measuring latency and errors per endpoint, and turning raw request logs into windows, buckets and trends with SQL.
-- **Frontend engineering:** typed React with TanStack Query and Recharts, including loading, empty and error states.
-- **Responsible AI use:** the LLM only ever sees server-computed aggregates, sits behind a swappable interface, and is optional.
-- **Engineering hygiene:** locked dependencies, static typing, linting, dependency audit, secret scanning and CI.
+- **Backend engineering:** async FastAPI, SQLAlchemy 2 with Psycopg 3, Pydantic-validated configuration, Alembic migrations.
+- **Request-level instrumentation:** simulated `/demo/*` endpoints with configurable latency and failure rates, and middleware that records endpoint, method, status code and latency for every call.
+- **Metrics in SQL:** summary, per-endpoint and status-code aggregates, plus latency trends in time buckets aligned to UTC, tested against a real PostgreSQL database.
+- **Engineering hygiene:** locked dependencies, static typing, linting, dependency audit, secret scanning, and CI that runs all of these plus unit and integration tests.
+
+## Planned
+
+- **`/metrics` endpoint and traffic generator** to expose the aggregates and produce realistic load for demos.
+- **React dashboard:** typed React with TanStack Query and Recharts, including loading, empty and error states.
+- **AI insights:** an LLM that only ever sees server-computed aggregates, sits behind a swappable interface, and stays optional.
 
 ## How it works
+
+The diagram shows the full design; [Status](#status) lists which parts are built.
 
 ```mermaid
 flowchart LR
@@ -60,7 +67,8 @@ No model is trained or hosted. The backend sends a structured summary of recent 
 | Demo routes (`GET /demo/*`) | Done |
 | `POST /demo/orders` (validated create) | Done |
 | Request logging middleware, wired into the app | Done |
-| `/metrics` API | Planned |
+| `/metrics` response schemas and SQL queries (summary, per endpoint, status codes, latency trends, recent requests) | Done |
+| `/metrics` endpoint | In progress |
 | Traffic generator for demos | Planned |
 | React dashboard | Planned |
 | AI insights (`/analyze`) | Planned |
@@ -74,8 +82,8 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 | --- | --- |
 | Backend | Python 3.12–3.14, FastAPI, SQLAlchemy (async), Psycopg 3, Pydantic |
 | Database | PostgreSQL 18, Alembic migrations |
-| Frontend | React, Vite, TypeScript, TanStack Query, Axios, Recharts |
-| AI | Google Gemini or Groq, called from the backend only |
+| Frontend (planned) | React, Vite, TypeScript, TanStack Query, Axios, Recharts |
+| AI (planned) | Google Gemini or Groq, called from the backend only |
 | Tooling | uv, Ruff, Pyright, pytest, pip-audit, pre-commit, gitleaks, GitHub Actions |
 
 ## Repository layout
@@ -101,3 +109,7 @@ make check      # lint, format, types, tests
 - [Backend](./backend/README.md): setup, configuration, data model, API contracts, testing, milestones
 - [Frontend](./frontend/README.md): planned architecture and data flow
 - [Continuous integration](./backend/CI.md): checks, local verification, branch protection
+
+## License
+
+[MIT](./LICENSE)
