@@ -162,6 +162,8 @@ Rules:
 - **Formats.** Timestamps are ISO 8601 UTC with a `Z` suffix; rates are fractions from 0 to 1; lists are arrays of objects rather than objects keyed by name.
 - **One snapshot.** The window end is fixed once per request and all queries run in one `REPEATABLE READ` transaction, so a row saved mid-request cannot make the per-endpoint totals disagree with the summary.
 
+The queries live in `app/services/metrics.py`. Each takes the caller's session and a `TimeWindow` (timezone-aware bounds, computed in Python so tests can fix the clock), and the statistics columns are defined once and reused by every query. Built so far: summary, per-endpoint statistics and status codes.
+
 ### `POST /analyze`
 
 Accepts an optional `window_minutes`. The server computes the metrics itself; clients cannot supply prompts or measurements. Returns the window, provider, generation time and analysis text. An empty window returns `no_data` without calling the provider. Missing configuration, timeouts, rate limits and malformed provider output return documented errors that expose no credentials or upstream details. Calls have a timeout, bounded input and output, a short cache and one in-flight request per window.
