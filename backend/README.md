@@ -151,9 +151,16 @@ Invalid requests (for example a `q` longer than 100 characters, or an order body
 
 Query parameters: `window_minutes` (default 60, 1–1440), `bucket_minutes` (default 5, 1–60), `recent_limit` (default 20, 1–100).
 
-Response: `window` (UTC start, end, bucket size), `summary` (total requests, errors, error rate, average latency, requests per minute), `endpoints` (the same per endpoint and method), `status_codes`, `latency_trend` (time buckets, overall and per endpoint) and `recent_requests` (newest first, ID as tie-breaker).
+Response (models in `app/schemas/metrics.py`): `window` (UTC start, end, window and bucket size), `summary` (total requests, server errors, client errors, error rate, average and p95 latency, requests per minute), `endpoints` (the same statistics per method and route template), `status_codes` (ascending, only statuses that occurred), `latency_trend` (time buckets with the same statistics, overall and per endpoint) and `recent_requests` (newest first, ID as tie-breaker).
 
-Rules: rows are placed in windows and buckets by `started_at`. Filtering uses the half-open interval `[start, end)` with edge buckets clipped. Empty windows return zero counts, empty arrays, and null averages. Overall averages come from totals, not from averaging endpoint averages. Errors are HTTP status 400 and above.
+Rules:
+
+- **Windows and buckets.** Rows are placed by `started_at`. Filtering uses the half-open interval `[start, end)`; every bucket is listed, empty ones included, and edge buckets are clipped to the window.
+- **Errors are 5xx.** `error_rate` is server errors divided by total requests. Client errors (4xx, such as a `422` for an invalid order) are counted separately, because a bad request is not the service failing.
+- **Latency.** Milliseconds as unrounded numbers; the client rounds for display. p95 is interpolated (`percentile_cont`); p99 is left out because small windows make it noisy. Overall figures come from the rows, never from averaging per-endpoint figures.
+- **Empty data.** Counts are `0` and lists are empty; `error_rate`, average and p95 are `null`, never `0`, since there is nothing to measure. These fields are always present, so generated client types read `number | null`.
+- **Formats.** Timestamps are ISO 8601 UTC with a `Z` suffix; rates are fractions from 0 to 1; lists are arrays of objects rather than objects keyed by name.
+- **One snapshot.** The window end is fixed once per request and all queries run in one `REPEATABLE READ` transaction, so a row saved mid-request cannot make the per-endpoint totals disagree with the summary.
 
 ### `POST /analyze`
 
