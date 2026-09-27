@@ -8,12 +8,12 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | --- | --- | --- |
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
 | 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
-| 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Planned |
+| 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Done |
 | 4. Demonstration workflow | Bounded traffic-generator script | Planned |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
 | 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
-Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; only `/health` exists today.
+Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; `/health`, the demo routes and `/metrics` exist today.
 
 ## Quick start
 
@@ -124,7 +124,7 @@ Design choices:
 | `GET /health` | Readiness with a database check; `503` if the database is unavailable. Not measured. Implemented. |
 | `GET /demo/users`, `/orders`, `/products`, `/search`, `/reports` | Synthetic services, each with its own latency range and failure rate; reports are slowest. Failures return a consistent JSON error body. Implemented. |
 | `POST /demo/orders` | Creates a priced order from a validated JSON body and returns `201`; nothing is stored. Implemented. |
-| `GET /metrics` | Aggregated metrics for a time window |
+| `GET /metrics` | Aggregated metrics for a time window; `503` if the database is unavailable. Not measured. Implemented. |
 | `POST /analyze` | AI observations for a time window |
 
 ### Demo routes and the error format
@@ -149,7 +149,7 @@ Invalid requests (for example a `q` longer than 100 characters, or an order body
 
 ### `GET /metrics`
 
-Query parameters: `window_minutes` (default 60, 1–1440), `bucket_minutes` (default 5, 1–60), `recent_limit` (default 20, 1–100).
+Query parameters: `window_minutes` (default `METRICS_WINDOW_MINUTES`, 60; 1–1440), `bucket_minutes` (default 5, 1–60), `recent_limit` (default 20, 1–100). A window may hold at most 288 buckets (a day in 5-minute buckets); above that the response is a `422` on `bucket_minutes` that names the smallest bucket size allowed. A database failure or a query over the 5-second limit returns the shared `503` body, with details only in the server log.
 
 Response (models in `app/schemas/metrics.py`): `window` (UTC start, end, window and bucket size), `summary` (total requests, server errors, client errors, error rate, average and p95 latency, requests per minute), `endpoints` (the same statistics per method and route template), `status_codes` (ascending, only statuses that occurred), `latency_trend` (time buckets with the same statistics, overall and per endpoint) and `recent_requests` (newest first, ID as tie-breaker).
 
@@ -160,11 +160,13 @@ Rules:
 - **Latency.** Milliseconds as unrounded numbers; the client rounds for display. p95 is interpolated (`percentile_cont`); p99 is left out because small windows make it noisy. Overall figures come from the rows, never from averaging per-endpoint figures.
 - **Empty data.** Counts are `0` and lists are empty; `error_rate`, average and p95 are `null`, never `0`, since there is nothing to measure. These fields are always present, so generated client types read `number | null`.
 - **Formats.** Timestamps are ISO 8601 UTC with a `Z` suffix; rates are fractions from 0 to 1; lists are arrays of objects rather than objects keyed by name.
-- **One snapshot.** The window end is fixed once per request and all queries run in one `REPEATABLE READ` transaction, so a row saved mid-request cannot make the per-endpoint totals disagree with the summary.
+- **One snapshot.** The window end is fixed once per request and all queries run in one `REPEATABLE READ, READ ONLY` transaction with a 5-second statement timeout, so a row saved mid-request cannot make the per-endpoint totals disagree with the summary, and a slow query cannot hold a connection.
 
-The queries live in `app/services/metrics.py`. Each takes the caller's session and a `TimeWindow` (timezone-aware bounds, computed in Python so tests can fix the clock), and the statistics columns are defined once and reused by every query. Built so far: summary, per-endpoint statistics, status codes, latency trend and recent requests.
+The queries live in `app/services/metrics.py`. Each takes the caller's session and a `TimeWindow` (timezone-aware bounds, computed in Python so tests can fix the clock), and the statistics columns are defined once and reused by every query. `collect_metrics` starts the snapshot and runs them in turn; the router (`app/api/routers/metrics.py`) only validates parameters, reads the clock (a dependency, so tests fix it) and maps database failures to `503`.
 
 The trend groups rows with PostgreSQL's `date_bin`, which returns only buckets that have rows; a pure Python function lists every bucket in the window and fills the empty ones. Both use the same origin constant, and a database bucket that the Python list lacks raises an error instead of being dropped. The overall trend is a separate query from the per-endpoint one, because percentiles cannot be combined: the overall p95 is not derivable from per-endpoint p95s. Recent requests are read newest first through the `started_at` index and converted to UTC, whatever the database session's time zone.
+
+**Performance, measured on 27 Sep 2026** (100,000 rows over 24 hours, local PostgreSQL 18): the full response takes a median of 17 ms for a 60-minute window and 260 ms for a 1440-minute window. Recent requests take under 0.1 ms through a backward scan of the `started_at` index. For a whole-day window every row is read, so a sequential scan is the right plan and no extra index would help; the per-endpoint trend is the slowest query (about 120 ms), mostly sorting for grouping and `percentile_cont`. Raising `work_mem` to 16 MB removed the disk sorts but did not change the end-to-end time, so it was not adopted. No index was added. If the table grows far beyond this, the next steps are `GROUPING SETS` to share one scan between the two trend queries, then rollup tables.
 
 ### `POST /analyze`
 

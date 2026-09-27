@@ -1,4 +1,4 @@
-"""One consistent JSON error format for every simulated failure."""
+"""One consistent JSON error format for every server failure."""
 
 from collections.abc import Iterable, Mapping
 from types import MappingProxyType
@@ -26,6 +26,10 @@ ERROR_DETAILS: Mapping[int, ErrorDetail] = MappingProxyType(
 _GENERIC = ErrorDetail(code="server_error", message="The server could not complete the request.")
 
 
+class ServiceUnavailable(Exception):
+    """Something the request needs, such as the database, is unavailable: answered with a 503."""
+
+
 def error_detail(status_code: int) -> ErrorDetail:
     return ERROR_DETAILS.get(status_code, _GENERIC)
 
@@ -45,3 +49,11 @@ def register_error_handlers(application: FastAPI) -> None:
     ) -> JSONResponse:
         body = ErrorResponse(error=error_detail(failure.status_code))
         return JSONResponse(status_code=failure.status_code, content=body.model_dump())
+
+    @application.exception_handler(ServiceUnavailable)
+    async def handle_service_unavailable(
+        _request: Request, _error: ServiceUnavailable
+    ) -> JSONResponse:
+        # The generic message only: causes such as connection details stay in the server log.
+        body = ErrorResponse(error=error_detail(503))
+        return JSONResponse(status_code=503, content=body.model_dump())

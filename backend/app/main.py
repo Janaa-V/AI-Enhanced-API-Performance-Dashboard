@@ -10,6 +10,7 @@ from starlette.types import Scope
 from app.api.errors import register_error_handlers
 from app.api.routers.demo import router as demo_router
 from app.api.routers.health import router as health_router
+from app.api.routers.metrics import router as metrics_router
 from app.config import get_settings
 from app.database import Database
 from app.middleware.request_logging import RequestLoggingMiddleware
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     register_error_handlers(application)
     application.include_router(health_router)
     application.include_router(demo_router)
+    application.include_router(metrics_router)
     return application
 
 
