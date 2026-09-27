@@ -45,7 +45,7 @@ select = ["E", "F", "I", "UP", "B", "S"]
 "tests/*" = ["S101", "S105", "S106", "S311"]
 
 [tool.pyright]
-include = ["app"]
+include = ["app", "scripts"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = "."
