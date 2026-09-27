@@ -1,7 +1,7 @@
 """Aggregate request_logs into the statistics returned by GET /metrics.
 
-Every query reads the half-open window [start, end) and runs in the caller's session,
-so the router can run them all in one snapshot transaction.
+Every query reads the half-open window [start, end) and runs in the caller's session;
+collect_metrics runs them all in one read-only snapshot transaction.
 """
 
 from collections.abc import Mapping
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import ColumnElement, Row, func, select
+from sqlalchemy import ColumnElement, Row, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import RequestLog
@@ -17,6 +17,8 @@ from app.schemas.metrics import (
     EndpointMetrics,
     EndpointTrend,
     LatencyTrend,
+    MetricsResponse,
+    MetricsWindow,
     RecentRequest,
     StatusCodeCount,
     Summary,
@@ -216,3 +218,43 @@ async def recent_requests(
         )
         for log in await session.scalars(statement)
     ]
+
+
+async def begin_snapshot(session: AsyncSession) -> None:
+    """Make the session's transaction a read-only snapshot with a time limit.
+
+    Must run before any other statement in the transaction. Rows are saved after each
+    response is sent, so without a snapshot a row landing between two queries could
+    make the per-endpoint totals disagree with the summary.
+    """
+    await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+    # A slow aggregate fails instead of holding a connection indefinitely.
+    await session.execute(text("SET LOCAL statement_timeout = '5s'"))
+
+
+async def collect_metrics(
+    session: AsyncSession,
+    *,
+    end: datetime,
+    window_minutes: int,
+    bucket_minutes: int,
+    recent_limit: int,
+) -> MetricsResponse:
+    """The whole /metrics response, read from one consistent snapshot."""
+    window = TimeWindow.ending_at(end, window_minutes)
+    bucket = timedelta(minutes=bucket_minutes)
+    await begin_snapshot(session)
+    # One session runs one query at a time, so these are awaited in turn.
+    return MetricsResponse(
+        window=MetricsWindow(
+            start=window.start,
+            end=window.end,
+            window_minutes=window_minutes,
+            bucket_minutes=bucket_minutes,
+        ),
+        summary=await summary(session, window),
+        endpoints=await endpoint_metrics(session, window),
+        status_codes=await status_codes(session, window),
+        latency_trend=await latency_trend(session, window, bucket),
+        recent_requests=await recent_requests(session, window, recent_limit),
+    )
