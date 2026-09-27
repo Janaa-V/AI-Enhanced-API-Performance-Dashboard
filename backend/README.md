@@ -9,7 +9,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | 1. Service foundation | Settings, lifespan-managed async database engine, CORS, `/health`, tooling, CI | Done |
 | 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Done |
-| 4. Demonstration workflow | Bounded traffic-generator script | Planned |
+| 4. Demonstration workflow | Bounded traffic generator (live and synthetic backfill), `make traffic` | Done |
 | 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
 | 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
@@ -26,6 +26,9 @@ make setup            # install dependencies, create .env if missing
 # 3. Set DB_PASSWORD in .env to match the PostgreSQL container
 make migrate         # create the database tables
 make run              # API on http://127.0.0.1:8000, docs at /docs
+# 4. In a second terminal, give the dashboard data:
+make traffic          # 60 s of live requests, then a summary
+curl 'http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1'
 ```
 
 | Command | Purpose |
@@ -35,6 +38,8 @@ make run              # API on http://127.0.0.1:8000, docs at /docs
 | `make test-integration` | Tests against a real PostgreSQL test database |
 | `make migrate` | Apply database migrations |
 | `make migration MSG="..."` | Generate a migration from model changes; always review it |
+| `make traffic` | Send live demo traffic to the running backend (`ARGS="--duration 300 --concurrency 10"`) |
+| `make backfill HOURS=24` | Write synthetic past rows so charts have history (invented, not measured) |
 | `make format` | Format with Ruff |
 | `make audit` | Scan dependencies for known vulnerabilities |
 | `make pre-commit-install` | Install Git hooks (Ruff, gitleaks, key detection) |
@@ -187,7 +192,7 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 - Each endpoint has a profile in `app/services/simulation/profiles.py`: a latency range, a failure probability and the server-error codes a failure chooses from. Latency is uniform within the range; a failing request still waits its full time first, like a real timeout.
 - `Simulator` (`simulator.py`) separates the decision from the side effects: `plan(profile)` is a pure function that returns the delay and outcome, and `simulate(profile)` waits and raises. It takes any profile, and receives its random generator and sleep function as parameters, so tests force any outcome and never wait in real time.
 - Two settings scale every profile (`SIMULATION_LATENCY_SCALE`, `SIMULATION_FAILURE_SCALE`), for example failures off for a quiet demo.
-- A local traffic script (planned) generates bounded, varied traffic for demos.
+- A traffic generator (`scripts/generate_traffic.py`) gives the dashboard data; see below.
 
 | Endpoint | Latency | Failure rate | Failure statuses |
 | --- | --- | --- | --- |
@@ -208,6 +213,16 @@ Checked on the real server with `curl`: one row per demo call; `/health`, `/docs
 | 5 | GET | `/demo/reports` | 200 | 1340.3 | 21:01:32.704 |
 | 6 | POST | `/demo/orders` | 201 | 288.1 | 21:01:34.074 |
 | 7 | POST | `/demo/orders` | 422 | 1.0 | 21:01:34.372 |
+
+### Demo traffic
+
+`scripts/generate_traffic.py` has two modes.
+
+**Live (default): `make traffic`.** Workers send real HTTP requests to a running server until the time is up, pausing 50–300 ms between requests like users would. Every row is measured by the real middleware. The mix is weighted like a small shop: users 30%, products 25%, order list 20%, search 12% (random terms), orders created 8% and reports 5%. One order in ten has a deliberately invalid body (unknown product, zero quantity or a misspelt field), so client errors (`422`) show on the dashboard. At the end it prints requests by status and a client-side p95 per endpoint, interpolated like `percentile_cont`, so it can be compared with `/metrics`; the client figure is a few milliseconds higher because it includes HTTP overhead. Bounds: `--duration` 1–3600 s (default 60), `--concurrency` 1–50 (default 5). It checks `/health` first, and it refuses any host other than localhost unless `--allow-remote` is passed.
+
+**Backfill: `make backfill HOURS=24`.** Writes past rows straight to the configured database so charts have history at once, at `--per-minute` rows per minute (default 20, so 28,800 rows for a day). The rows use the same mix and the same simulation profiles as live traffic, and invalid orders take 1–5 ms because the real app rejects them before simulating anything. **These rows are invented, not measured**, and skip the recording pipeline. It refuses to run when `ENVIRONMENT=production`, and refuses if the range already holds rows, so running it twice cannot double the data. At most 24 hours, the longest `/metrics` window.
+
+Both modes accept `--seed` for repeatable runs.
 
 ## Testing
 
@@ -235,25 +250,27 @@ backend/
 │   ├── config.py                  Validated settings
 │   ├── database.py                Async engine and per-request sessions
 │   ├── models.py                  SQLAlchemy models (request_logs)
-│   ├── schemas/                   Pydantic response models (demo, errors)
+│   ├── schemas/                   Pydantic response models (demo, errors, metrics)
 │   ├── services/demo_data.py      Fixed fake data for the demo routes
+│   ├── services/metrics.py        /metrics queries, buckets and the snapshot
 │   ├── services/request_recorder.py  Saves request_logs rows, best effort
 │   ├── middleware/request_logging.py  Times /demo requests and hands them to the recorder
 │   ├── services/simulation/       Simulated latency and failures
 │   │   ├── profiles.py            Per-endpoint behaviour (data)
 │   │   └── simulator.py           Decision (plan) and side effects (simulate)
 │   └── api/
-│       ├── dependencies.py        Shared dependencies (the simulator)
+│       ├── dependencies.py        Shared dependencies (simulator, clock, session, settings)
 │       ├── errors.py              One JSON error format and its handler
-│       └── routers/               health.py, demo.py
+│       └── routers/               health.py, demo.py, metrics.py
 ├── migrations/                    Alembic revisions (schema history)
+├── scripts/generate_traffic.py    Live demo traffic and synthetic backfill
 ├── tests/
 ├── pyproject.toml, uv.lock        Dependencies (locked)
 ├── Makefile                       Developer commands
 └── CI.md                          Automated checks
 ```
 
-Planned additions: `middleware/request_logging.py`, `api/routers/{demo,metrics,analysis}.py`, `services/{metrics_service,ai_analysis,ai_providers}.py`, `scripts/generate_traffic.py`.
+Planned additions: `api/routers/analysis.py`, `services/{ai_analysis,ai_providers}.py`.
 
 ## Deployment assumptions
 
