@@ -2,3 +2,6 @@ dist
 coverage
 package-lock.json
 README.md
+# Generated; see the README section "Updating the API contract".
+openapi.json
+src/api/schema.gen.ts
