@@ -36,15 +36,15 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Check generated API types match openapi.json
-        run: npm run check:api
+        run: make api-check
       - name: Lint TypeScript
-        run: npm run lint
+        run: make lint
       - name: Lint CSS
-        run: npm run lint:css
+        run: make lint-css
       - name: Check formatting
-        run: npm run format:check
+        run: make format-check
       - name: Check types
-        run: npm run typecheck
+        run: make typecheck
 
   tests:
     name: Frontend tests
@@ -63,7 +63,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Run tests
-        run: npm test
+        run: make test
 
   build:
     name: Frontend build
@@ -85,7 +85,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Build
-        run: npm run build
+        run: make build
 
   dependency-audit:
     name: Frontend dependency audit
@@ -102,7 +102,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Audit runtime and development dependencies
-        run: npm audit
+        run: make audit
 
   required:
     name: Frontend CI passed
