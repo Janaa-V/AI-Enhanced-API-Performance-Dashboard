@@ -4,6 +4,9 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 
 export const THEME_PREFERENCES: readonly ThemePreference[] = ['light', 'dark', 'system']
 
+// What a first-time viewer sees. Also the fallback when storage is blocked or holds nonsense.
+export const DEFAULT_THEME: ThemePreference = 'dark'
+
 // Also read by the inline script in index.html, which applies the theme before the first paint.
 export const THEME_STORAGE_KEY = 'dashboard-theme'
 
@@ -15,23 +18,23 @@ function isThemePreference(value: unknown): value is ThemePreference {
 function readStored(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY)
-    return isThemePreference(stored) ? stored : 'system'
+    return isThemePreference(stored) ? stored : DEFAULT_THEME
   } catch {
-    return 'system'
+    return DEFAULT_THEME
   }
 }
 
+// Every choice is stored, "system" included: with nothing stored the default (dark) applies.
 function store(preference: ThemePreference): void {
   try {
-    if (preference === 'system') localStorage.removeItem(THEME_STORAGE_KEY)
-    else localStorage.setItem(THEME_STORAGE_KEY, preference)
+    localStorage.setItem(THEME_STORAGE_KEY, preference)
   } catch {
     // Not remembered; the choice still applies to this visit.
   }
 }
 
-// Light, dark or the operating system's choice. tokens.css does the rest: data-theme on <html>
-// picks a theme, and without it prefers-color-scheme decides.
+// Dark by default; light, or the operating system's choice, on request. tokens.css does the
+// rest: data-theme on <html> picks a theme, and without it prefers-color-scheme decides.
 export function useTheme() {
   const [preference, setPreferenceState] = useState(readStored)
 
