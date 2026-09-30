@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: KPIs and charts in place.** Steps 1 to 5 of the [build order](#build-order) are done: tooling and CI, the typed API contract, the pure formatting and chart-data functions, the data hooks, controls, theme toggle, page layout and loading, empty and error states, and the KPI cards, latency chart and status-code chart, working against the real backend. The tables follow. The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: dashboard complete.** Steps 1 to 6 of the [build order](#build-order) are done: tooling and CI, the typed API contract, the pure formatting and chart-data functions, the data hooks, controls, theme toggle, page layout and loading, empty and error states, the KPI cards, latency chart and status-code chart, and the sortable endpoint and recent-requests tables, all working against the real backend. The polish pass (step 7) follows. The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -78,6 +78,7 @@ frontend/
     │   ├── useMetrics.ts             useQuery wrapper: key, polling, previous data while switching windows
     │   ├── useDashboardControls.ts   Selected window and auto-refresh, mirrored in the URL query string
     │   ├── useNow.ts                 Ticking clock for "updated N seconds ago"
+    │   ├── useSortState.ts           A table's sorted column and direction
     │   ├── useTheme.ts               Light, dark or system theme; sets data-theme on <html>
     │   ├── useChartColors.ts         Resolved token colours for Recharts, re-read on theme change
     │   ├── usePrefersReducedMotion.ts  Switches chart animations off for reduced motion
@@ -102,7 +103,8 @@ frontend/
     ├── styles/
     │   ├── tokens.css                Design tokens as CSS variables; light and dark themes; reduced motion
     │   ├── global.css                Small reset, base typography and focus outline
-    │   └── shared.module.css         Patterns reused with composes: (visuallyHidden, button, numeric)
+    │   ├── shared.module.css         Patterns reused with composes: (visuallyHidden, button, numeric)
+    │   └── table.module.css          The data tables' shared look
     │
     └── test/
         ├── setup.ts                  Testing Library matchers, MSW server lifecycle, page-state reset
@@ -184,7 +186,7 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | `feedback/` | `Panel`, `LoadingState`, `EmptyState`, `ErrorState`, `StaleDataBanner` | `Panel` is the frame every section uses; it picks loading, empty, error or content, so each section handles all four states the same way. If a refresh fails after a success, the last data stays visible under `StaleDataBanner` instead of being replaced by an error. |
 | `kpis/` | `KpiGrid`, `KpiCard` | Takes `Summary`: requests, requests per minute, error rate, average and p95 latency, as a `<dl>`. Error rate counts `5xx` only; the card shows `4xx` separately, matching the backend's definition. As many columns as the panel fits; values step down a size in a narrow panel (container query). |
 | `charts/` | `LatencyPanel`, `LatencyChart`, `StatusCodeChart`, `ChartTable` | `LatencyPanel` holds the p95/average switch. `LatencyChart` draws one 2 px line per endpoint plus "All endpoints" in the text colour; empty buckets are gaps, and a bucket between two empty ones gets a dot. The X axis spans the window in local time; the tooltip lists every series at the hovered bucket, highest first. `StatusCodeChart` draws one thin bar per code, coloured by class and labelled with a symbol (✓ 2xx, ! 4xx, ✕ 5xx), with the class totals as text above. Legends are HTML beside the chart. Each chart has a screen-reader summary and a collapsed `ChartTable` with every value, which the lighter light-mode series need (see the palette validation). |
-| `tables/` | `EndpointTable`, `RecentRequestsTable`, `SortableHeader` | Client-side sorting with `aria-sort`; tables scroll horizontally inside their panel on narrow screens, never the page. |
+| `tables/` | `EndpointTable`, `RecentRequestsTable`, `SortableHeader` | Client-side sorting with `aria-sort` on each header; a second click flips the direction, and a new column starts in its natural direction (numbers largest first, text A to Z). `null` sorts last both ways. The endpoint table starts slowest first (p95) and shows each endpoint's latency-chart colour beside its name; recent requests start newest first, with times sorted as instants and error statuses marked ✕ 5xx or ! 4xx. Tables scroll horizontally inside their panel on narrow screens, never the page, and the scroll area is focusable for keyboard users. |
 | `insights/` | *(later)* `InsightsPanel` | Labelled "AI-assisted analysis". Shows the provider and generation time, and a clear message when AI is not configured on the server. |
 
 ### Error and empty states

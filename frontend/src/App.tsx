@@ -8,6 +8,8 @@ import { StaleDataBanner } from './components/feedback/StaleDataBanner'
 import { DashboardLayout } from './components/layout/DashboardLayout'
 import { KpiGrid } from './components/kpis/KpiGrid'
 import { Header } from './components/layout/Header'
+import { EndpointTable } from './components/tables/EndpointTable'
+import { RecentRequestsTable } from './components/tables/RecentRequestsTable'
 import { useDashboardControls } from './hooks/useDashboardControls'
 import { REFRESH_INTERVAL_MS, useMetrics } from './hooks/useMetrics'
 
@@ -70,6 +72,21 @@ function App() {
           <LatencyPanel status={status(isEmpty)} busy={busy} data={data} />
           <Panel title="Status codes" status={status(isEmpty)} busy={busy} loadingRows={4}>
             {data && <StatusCodeChart codes={data.status_codes} />}
+          </Panel>
+        </>
+      }
+      tables={
+        <>
+          <Panel title="Endpoints" status={status(isEmpty)} busy={busy} loadingRows={4}>
+            {data && <EndpointTable endpoints={data.endpoints} />}
+          </Panel>
+          <Panel
+            title="Recent requests"
+            status={status(!data?.recent_requests.length)}
+            busy={busy}
+            loadingRows={6}
+          >
+            {data && <RecentRequestsTable requests={data.recent_requests} />}
           </Panel>
         </>
       }
