@@ -2,7 +2,7 @@
 
 A full-stack observability project: simulated API traffic is recorded in PostgreSQL and aggregated into latency, throughput and error metrics. A React dashboard is next; plain-English summaries from an LLM are planned.
 
-> **Status: backend complete, frontend next.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard is next; AI insights are planned. See [Status](#status).
+> **Status: backend complete, frontend in progress.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard is scaffolded with its tooling, theme and CI; its panels are next. AI insights are planned. See [Status](#status).
 
 ## Built so far
 
@@ -70,7 +70,8 @@ Not built yet; this is the design. No model will be trained or hosted. The backe
 | `/metrics` response schemas and SQL queries (summary, per endpoint, status codes, latency trends, recent requests) | Done |
 | `/metrics` endpoint (bounded parameters, read-only snapshot, performance-checked) | Done |
 | Traffic generator for demos (live and synthetic backfill) | Done |
-| React dashboard | Next |
+| React dashboard foundation: Vite and TypeScript scaffold, lint, format and test tooling, Holi theme tokens, CI | Done |
+| React dashboard panels (KPIs, charts, tables, controls) | Next |
 | AI insights (`/analyze`) | Planned |
 | Deployment on free-tier services | Planned |
 
@@ -82,15 +83,15 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 | --- | --- |
 | Backend | Python 3.12–3.14, FastAPI, SQLAlchemy (async), Psycopg 3, Pydantic |
 | Database | PostgreSQL 18, Alembic migrations |
-| Frontend (planned) | React, Vite, TypeScript, TanStack Query, Axios, Recharts |
+| Frontend | React 19, Vite, TypeScript, CSS Modules; TanStack Query, Axios and Recharts for the panels in progress |
 | AI (planned) | Google Gemini or Groq, called from the backend only |
-| Tooling | uv, Ruff, Pyright, pytest, pip-audit, pre-commit, gitleaks, GitHub Actions |
+| Tooling | uv, Ruff, Pyright, pytest, pip-audit, ESLint, Stylelint, Prettier, Vitest, npm audit, pre-commit, gitleaks, GitHub Actions |
 
 ## Repository layout
 
 ```text
 backend/     FastAPI service, tests and tooling      -> backend/README.md
-frontend/    React dashboard (planned, not started)  -> frontend/README.md
+frontend/    React dashboard (in progress)           -> frontend/README.md
 ```
 
 ## Quick start
