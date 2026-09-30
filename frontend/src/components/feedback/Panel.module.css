@@ -34,3 +34,8 @@
 .body {
   min-inline-size: 0;
 }
+
+.busy {
+  opacity: 0.55;
+  transition: opacity var(--duration-fast);
+}

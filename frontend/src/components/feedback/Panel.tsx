@@ -17,6 +17,8 @@ interface PanelProps {
   loadingRows?: number
   // Controls in the heading row, such as a metric toggle.
   actions?: ReactNode
+  // Showing the previous window's data while the new one loads: dimmed, not replaced.
+  busy?: boolean | undefined
   // Rendered only when status is 'ready'.
   children: ReactNode
 }
@@ -31,6 +33,7 @@ export function Panel({
   emptyMessage,
   loadingRows,
   actions,
+  busy = false,
   children,
 }: PanelProps) {
   const headingId = useId()
@@ -42,7 +45,7 @@ export function Panel({
         </h2>
         {actions && status === 'ready' && <div className={styles.actions}>{actions}</div>}
       </div>
-      <div className={styles.body}>
+      <div className={busy ? `${styles.body} ${styles.busy}` : styles.body} aria-busy={busy}>
         {status === 'loading' && <LoadingState rows={loadingRows} />}
         {status === 'error' && <ErrorState error={error} onRetry={onRetry} />}
         {status === 'empty' && <EmptyState>{emptyMessage}</EmptyState>}

@@ -12,20 +12,25 @@ describe('App', () => {
     renderWithClient(<App />)
     expect(screen.getByRole('heading', { name: 'API Performance Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Window' })).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Loading')
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('Loading')
   })
 
   it('shows the metrics once they load', async () => {
     renderWithClient(<App />)
-    const overview = await screen.findByRole('region', { name: 'Overview' })
-    await waitFor(() => expect(overview).toHaveTextContent('120 requests'))
+    const kpis = await screen.findByRole('region', { name: 'Last 1 hour' })
+    await waitFor(() => expect(within(kpis).getByText('120')).toBeInTheDocument())
+    expect(screen.getByRole('region', { name: 'Latency over time' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Status codes' })).toHaveTextContent('2xx Success')
     expect(screen.getByText(/^Updated/)).toBeInTheDocument()
   })
 
   it('shows the empty state for a window without traffic', async () => {
     server.use(metricsHandlers.empty)
     renderWithClient(<App />)
-    expect(await screen.findByText('No requests in this window')).toBeInTheDocument()
+    // Both charts say so; the KPI cards still show 0 requests and "—" for latency.
+    expect(await screen.findAllByText('No requests in this window')).toHaveLength(2)
+    const kpis = screen.getByRole('region', { name: 'Last 1 hour' })
+    expect(within(kpis).getAllByText('—')).not.toHaveLength(0)
   })
 
   it('shows one error for the page when the first load fails, and recovers on retry', async () => {
@@ -34,22 +39,23 @@ describe('App', () => {
     renderWithClient(<App />)
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('The service is temporarily unavailable.')
-    expect(screen.queryByRole('region', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Last 1 hour' })).not.toBeInTheDocument()
 
     server.resetHandlers()
     await user.click(within(alert).getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('region', { name: 'Overview' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Last 1 hour' })).toBeInTheDocument()
   })
 
   it('keeps the last data when a refresh fails', async () => {
     const user = userEvent.setup()
     renderWithClient(<App />)
-    await screen.findByText(/120 requests/)
+    const kpis = await screen.findByRole('region', { name: 'Last 1 hour' })
+    await within(kpis).findByText('120')
 
     server.use(metricsHandlers.unavailable)
     await user.click(screen.getByRole('button', { name: 'Refresh now' }))
     expect(await screen.findByText(/The last refresh failed/)).toBeInTheDocument()
-    expect(screen.getByText(/120 requests/)).toBeInTheDocument()
+    expect(within(kpis).getByText('120')).toBeInTheDocument()
   })
 
   it('loads the chosen window and puts it in the URL', async () => {
@@ -62,10 +68,10 @@ describe('App', () => {
     )
     const user = userEvent.setup()
     renderWithClient(<App />)
-    await screen.findByText(/in the last 1 hour/)
+    await screen.findByRole('region', { name: 'Last 1 hour' })
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Window' }), '6 hours')
-    expect(await screen.findByText(/in the last 6 hours/)).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Last 6 hours' })).toBeInTheDocument()
     expect(windows).toEqual(['60', '360'])
     expect(window.location.search).toBe('?window=360')
   })
