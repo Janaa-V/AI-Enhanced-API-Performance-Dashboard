@@ -90,7 +90,7 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 
 ```text
 backend/     FastAPI service, tests and tooling      -> backend/README.md
-frontend/    React dashboard (not started)           -> frontend/README.md
+frontend/    React dashboard (planned, not started)  -> frontend/README.md
 ```
 
 ## Quick start
@@ -111,7 +111,7 @@ Then open `http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1`.
 ## Documentation
 
 - [Backend](./backend/README.md): setup, configuration, data model, API contracts, testing, milestones
-- [Frontend](./frontend/README.md): planned architecture and data flow
+- [Frontend](./frontend/README.md): planned architecture, folder structure, modules and build order
 - [Continuous integration](./backend/CI.md): checks, local verification, branch protection
 
 ## License
