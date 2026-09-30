@@ -14,6 +14,10 @@ afterEach(() => {
   cleanup()
   // Undo any server.use() from the test, back to the default success handler.
   server.resetHandlers()
+  // Page state that hooks write: the query string, the saved theme and data-theme.
+  window.history.replaceState(null, '', '/')
+  localStorage.clear()
+  delete document.documentElement.dataset.theme
 })
 
 afterAll(() => {

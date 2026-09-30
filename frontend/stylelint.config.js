@@ -7,6 +7,8 @@ export default {
       { message: 'Use camelCase class names, so they read as styles.cardValue' },
     ],
     'declaration-no-important': true,
+    // composes: names camelCase classes, which are not CSS keywords.
+    'value-keyword-case': ['lower', { ignoreProperties: ['composes'] }],
     // Colours and spacing come from tokens.css, so both themes stay consistent.
     'color-no-hex': [true, { message: 'Use a colour token from tokens.css' }],
     'color-named': ['never', { message: 'Use a colour token from tokens.css' }],

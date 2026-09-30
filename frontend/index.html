@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Latency, throughput and error metrics for a simulated API." />
     <title>API Performance Dashboard</title>
+    <script>
+      // Apply a saved theme before the first paint, so a viewer who picked dark never sees a
+      // light flash while the app loads. Same key and values as src/hooks/useTheme.ts.
+      try {
+        const theme = localStorage.getItem('dashboard-theme')
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+      } catch {
+        // Storage blocked: the operating system's theme applies until the app loads.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
