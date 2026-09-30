@@ -12,7 +12,7 @@ describe('KpiGrid', () => {
   it('shows the headline numbers, formatted', () => {
     render(<KpiGrid summary={busyMetrics.summary} />)
     expect(valueOf('Requests')).toBe('120')
-    expect(valueOf('Requests per minute')).toBe('8.0 req/min')
+    expect(valueOf('Requests per minute')).toBe('8.0')
     expect(valueOf('Error rate')).toBe('2.5 %')
     expect(valueOf('Average latency')).toBe('81 ms')
     expect(valueOf('p95 latency')).toBe('403 ms')

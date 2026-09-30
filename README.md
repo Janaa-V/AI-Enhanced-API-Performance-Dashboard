@@ -1,8 +1,12 @@
 # AI-Enhanced API Performance Dashboard
 
-A full-stack observability project: simulated API traffic is recorded in PostgreSQL and aggregated into latency, throughput and error metrics. A React dashboard is next; plain-English summaries from an LLM are planned.
+A full-stack observability project: simulated API traffic is recorded in PostgreSQL, aggregated into latency, throughput and error metrics, and shown on a React dashboard. Plain-English summaries from an LLM are planned.
 
-> **Status: backend complete, frontend in progress.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard is scaffolded with its tooling, theme and CI, and has a typed API layer generated from the backend's OpenAPI schema; its panels are next. AI insights are planned. See [Status](#status).
+> **Status: backend and dashboard complete; AI insights planned.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard shows KPI cards, latency and status-code charts and sortable tables from that one endpoint, refreshing itself, in light and dark themes. See [Status](#status).
+
+![The dashboard in its light theme: KPI cards, a latency chart per endpoint, status codes, and the endpoint table](docs/images/dashboard-light.png)
+
+<sub>Measured from live demo traffic (`make traffic`). A [dark theme](docs/images/dashboard-dark.png) follows the operating system or a toggle.</sub>
 
 ## Built so far
 
@@ -10,11 +14,11 @@ A full-stack observability project: simulated API traffic is recorded in Postgre
 - **Request-level instrumentation:** simulated `/demo/*` endpoints with configurable latency and failure rates, and middleware that records endpoint, method, status code and latency for every call.
 - **Metrics API:** `GET /metrics` returns summary, per-endpoint and status-code aggregates with p95 latency, latency trends in UTC-aligned buckets and recent requests, all read from one consistent snapshot and tested against a real PostgreSQL database. Measured at 17 ms for a one-hour window over 100,000 rows.
 - **Traffic generator:** one command sends realistic, bounded live traffic (including deliberate client errors); a separate backfill mode writes clearly labelled synthetic history.
+- **React dashboard:** strict TypeScript with types generated from the backend's OpenAPI schema (CI fails if they drift), TanStack Query polling that pauses in hidden tabs, Recharts charts with fixed per-endpoint colours validated for colour-vision deficiencies, and loading, empty, error and stale-data states. Checked with axe-core (no WCAG 2.1 AA violations in either theme), by keyboard alone, and at phone, tablet and desktop widths.
 - **Engineering hygiene:** locked dependencies, static typing, linting, dependency audit, secret scanning, and CI that runs all of these plus unit and integration tests.
 
 ## Planned
 
-- **React dashboard:** typed React with TanStack Query and Recharts, including loading, empty and error states.
 - **AI insights:** an LLM that only ever sees server-computed aggregates, sits behind a swappable interface, and stays optional.
 
 ## How it works
@@ -71,8 +75,8 @@ Not built yet; this is the design. No model will be trained or hosted. The backe
 | `/metrics` endpoint (bounded parameters, read-only snapshot, performance-checked) | Done |
 | Traffic generator for demos (live and synthetic backfill) | Done |
 | React dashboard foundation: Vite and TypeScript scaffold, lint, format and test tooling, Holi theme tokens, CI | Done |
-| React dashboard panels (KPIs, charts, tables, controls) | Next |
-| AI insights (`/analyze`) | Planned |
+| React dashboard: typed API layer, controls, KPI cards, latency and status-code charts, sortable tables, light and dark themes | Done |
+| AI insights (`/analyze`) | Next |
 | Deployment on free-tier services | Planned |
 
 Not in scope for the first release: authentication, alerting, monitoring real production APIs, model training, WebSockets and distributed storage.
@@ -83,7 +87,7 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 | --- | --- |
 | Backend | Python 3.12–3.14, FastAPI, SQLAlchemy (async), Psycopg 3, Pydantic |
 | Database | PostgreSQL 18, Alembic migrations |
-| Frontend | React 19, Vite, TypeScript, CSS Modules; TanStack Query, Axios and Recharts for the panels in progress |
+| Frontend | React 19, Vite, TypeScript, CSS Modules, TanStack Query, Axios, Recharts, openapi-typescript |
 | AI (planned) | Google Gemini or Groq, called from the backend only |
 | Tooling | uv, Ruff, Pyright, pytest, pip-audit, ESLint, Stylelint, Prettier, Vitest, npm audit, pre-commit, gitleaks, GitHub Actions |
 
@@ -91,7 +95,8 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 
 ```text
 backend/     FastAPI service, tests and tooling      -> backend/README.md
-frontend/    React dashboard (in progress)           -> frontend/README.md
+frontend/    React dashboard                         -> frontend/README.md
+docs/        README images
 ```
 
 ## Quick start
@@ -107,7 +112,16 @@ make traffic    # in a second terminal: 60 s of demo traffic
 make check      # lint, format, types, tests
 ```
 
-Then open `http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1`.
+Then start the dashboard (requires Node.js 20.19 or later):
+
+```bash
+cd frontend
+cp .env.example .env   # points the dashboard at http://127.0.0.1:8000
+npm install
+npm run dev            # http://localhost:5173
+```
+
+The raw data is at `http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1`.
 
 ## Documentation
 

@@ -1,4 +1,6 @@
 .card {
+  /* The value's size follows the card's own width (below). */
+  container-type: inline-size;
   display: grid;
   gap: var(--space-1);
   align-content: start;
@@ -27,12 +29,8 @@
   font-size: var(--text-xs);
 }
 
-/* In a narrow panel (a phone), one step smaller, so "89 req/min" stays on one line. */
-@container (width < 30rem) {
-  .card {
-    padding: var(--space-3);
-  }
-
+/* In a narrow card (two per row on a phone), one step smaller. */
+@container (width < 12rem) {
   .value {
     font-size: var(--text-lg);
   }

@@ -1,7 +1,18 @@
 /* The data tables' shared look. Tables scroll inside their panel; the page never scrolls sideways. */
 
+/* Scroll shadows: a soft edge appears on a side only while there is more table that way. The
+   surface-coloured covers scroll with the content and hide the shadows at either end. */
 .scroll {
+  --edge: color-mix(in srgb, var(--color-text) 14%, transparent);
+
   overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--color-surface) 40%, transparent) left / var(--space-6) 100%
+      no-repeat local,
+    linear-gradient(to left, var(--color-surface) 40%, transparent) right / var(--space-6) 100%
+      no-repeat local,
+    linear-gradient(to right, var(--edge), transparent) left / var(--space-3) 100% no-repeat scroll,
+    linear-gradient(to left, var(--edge), transparent) right / var(--space-3) 100% no-repeat scroll;
 }
 
 .table {

@@ -63,10 +63,11 @@ describe('formatCount and formatRate', () => {
   })
 
   it.each([
-    [0, '0.0 req/min'],
-    [8, '8.0 req/min'],
-    [9.96, '10 req/min'],
-    [1234.4, '1,234 req/min'],
+    [0, '0.0'],
+    [0.4, '0.4'],
+    [8, '8.0'],
+    [9.96, '10'],
+    [1234.4, '1,234'],
   ])('%s per minute -> %s', (rate, expected) => {
     expect(formatRate(rate)).toBe(expected)
   })
