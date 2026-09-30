@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: API layer and pure logic in place.** The app, tooling, Holi design tokens and CI from build step 1 are in place. Step 2 added the typed contract (`openapi.json`, generated types, `models/` and `api/`, tested against MSW), and step 3 the formatting, chart-data, sorting and window-preset functions. `useTheme` and `ThemeToggle` move to step 4 with the header, then the panels follow the [build order](#build-order). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: live data and controls in place.** Steps 1 to 4 of the [build order](#build-order) are done: tooling and CI, the typed API contract, the pure formatting and chart-data functions, and the data hooks, controls, theme toggle, page layout and loading, empty and error states, working against the real backend. The panels (KPIs, charts, tables) follow. The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -99,10 +99,12 @@ frontend/
     │
     ├── styles/
     │   ├── tokens.css                Design tokens as CSS variables; light and dark themes; reduced motion
-    │   └── global.css                Small reset, base typography and focus outline
+    │   ├── global.css                Small reset, base typography and focus outline
+    │   └── shared.module.css         Patterns reused with composes: (visuallyHidden, button, numeric)
     │
     └── test/
-        ├── setup.ts                  Testing Library matchers, MSW server lifecycle
+        ├── setup.ts                  Testing Library matchers, MSW server lifecycle, page-state reset
+        ├── render.tsx                renderWithClient and renderHookWithClient: a fresh QueryClient, retries off
         ├── server.ts                 MSW handlers for /metrics (success, empty, 422, 503, network error)
         └── fixtures/metrics.ts       Typed MetricsResponse fixtures: busy and empty; more are added with the panels that need them
 ```
@@ -119,7 +121,7 @@ components  ->  hooks  ->  api  ->  models
       \-> lib, models
 ```
 
-- `components/` never import from `api/` or TanStack Query; they receive data and callbacks as props. Only `App.tsx` and `InsightsPanel` call hooks that fetch.
+- `components/` never import from `api/` or TanStack Query; they receive data and callbacks as props. `ErrorState` takes a plain `{ kind, message }`, which an `ApiError` satisfies, rather than importing the class. Only `App.tsx` and `InsightsPanel` call hooks that fetch.
 - `api/` has no React imports and returns typed data or throws `ApiError`.
 - `lib/` and `models/` are pure: no React, no Axios, no side effects.
 - Only `api/schema.gen.ts` knows generated type names; the rest of the app imports from `models/`, so regeneration never ripples through components.
@@ -153,12 +155,14 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 
 | Hook | Contract |
 | --- | --- |
-| `useMetrics(window, { autoRefresh })` | Query key `['metrics', windowMinutes, bucketMinutes, recentLimit]`. Polls every 15 seconds when auto-refresh is on; TanStack Query pauses polling while the tab is hidden and refetches on focus. Keeps the previous window's data on screen while a new window loads. Retries network errors and `5xx` twice; never retries `4xx`. |
+| `useMetrics(preset, { autoRefresh })` | Query key `['metrics', windowMinutes, bucketMinutes]`; the recent-requests limit is left at the backend's default (20). Polls every 15 seconds when auto-refresh is on; TanStack Query pauses polling while the tab is hidden and refetches on focus. Keeps the previous window's data on screen while a new window loads. Retries network errors and `5xx` twice; never retries `4xx`. |
 | `useDashboardControls()` | Selected preset and auto-refresh flag, read from and written to the URL query string (`?window=60&refresh=on`), so a view can be bookmarked or shared without adding a router. Unknown values fall back to the defaults. |
 | `useNow(intervalMs)` | Current time, ticking, for relative "updated" labels. Kept separate so only that label re-renders every second. |
 | `useAnalysis()` | *(later)* `useMutation` around `requestAnalysis`; only runs when the user clicks. |
 
-`queryClient.ts` centralises defaults (`staleTime` 10 seconds, the retry rule above) so tests build the same client with retries off.
+`queryClient.ts` centralises defaults (`staleTime` 10 seconds, the retry rule above) so tests build the same client with retries off. It also registers `ApiError` as TanStack Query's error type, so `query.error` is typed without casts.
+
+`useTheme` is backed by a small inline script in `index.html` that applies the saved theme before the first paint, so a viewer who picked dark never sees a light flash while the app loads.
 
 ### `lib/`
 
@@ -186,6 +190,7 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | Situation | What the user sees |
 | --- | --- |
 | First load | Skeletons in each panel, sized like the content, so the layout does not jump |
+| First load fails | One `ErrorState` for the page instead of one per panel, since every panel reads the same response |
 | Window has no requests | `EmptyState` with the command that generates traffic (`make traffic`); KPIs show "—" |
 | Backend unreachable (`network`, `timeout`) | `ErrorState` naming the configured API URL, with "Try again" |
 | `503 service_unavailable` | The server's message ("The service is temporarily unavailable.") with "Try again" |
