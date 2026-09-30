@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: live data and controls in place.** Steps 1 to 4 of the [build order](#build-order) are done: tooling and CI, the typed API contract, the pure formatting and chart-data functions, and the data hooks, controls, theme toggle, page layout and loading, empty and error states, working against the real backend. The panels (KPIs, charts, tables) follow. The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: KPIs and charts in place.** Steps 1 to 5 of the [build order](#build-order) are done: tooling and CI, the typed API contract, the pure formatting and chart-data functions, the data hooks, controls, theme toggle, page layout and loading, empty and error states, and the KPI cards, latency chart and status-code chart, working against the real backend. The tables follow. The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -80,20 +80,22 @@ frontend/
     │   ├── useNow.ts                 Ticking clock for "updated N seconds ago"
     │   ├── useTheme.ts               Light, dark or system theme; sets data-theme on <html>
     │   ├── useChartColors.ts         Resolved token colours for Recharts, re-read on theme change
+    │   ├── usePrefersReducedMotion.ts  Switches chart animations off for reduced motion
     │   └── useAnalysis.ts            (later) useMutation wrapper for POST /analyze
     │
     ├── lib/                          Pure functions, unit-tested, no React
     │   ├── format.ts                 Latency, percentages, counts, local times; null -> "—"
     │   ├── endpoints.ts              endpointKey(): "GET /demo/orders"
     │   ├── chartData.ts              Trend buckets -> Recharts rows; status codes -> classes
+    │   ├── series.ts                 assignSeriesSlots(): each endpoint's fixed colour slot
     │   └── sort.ts                   Stable, null-last comparators for the tables
     │
     ├── components/                   One folder per dashboard section; component, CSS Module and test side by side
     │   ├── layout/                   DashboardLayout, Header, ThemeToggle
-    │   ├── controls/                 WindowSelector, RefreshControl
+    │   ├── controls/                 WindowSelector, RefreshControl, SegmentedControl
     │   ├── feedback/                 Panel, LoadingState, EmptyState, ErrorState, StaleDataBanner
     │   ├── kpis/                     KpiGrid, KpiCard
-    │   ├── charts/                   LatencyChart, StatusCodeChart, ChartTooltip
+    │   ├── charts/                   LatencyPanel, LatencyChart, StatusCodeChart, ChartTable
     │   ├── tables/                   EndpointTable, RecentRequestsTable, SortableHeader
     │   └── insights/                 (later) InsightsPanel
     │
@@ -178,10 +180,10 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | Folder | Components | Notes |
 | --- | --- | --- |
 | `layout/` | `DashboardLayout`, `Header` | CSS grid: KPIs across the top, charts in two columns on desktop and one on phones, tables full width. |
-| `controls/` | `WindowSelector`, `RefreshControl` | Native `<select>` and `<button>` for keyboard and screen-reader support. `RefreshControl` shows "updated N seconds ago", the auto-refresh toggle and "Refresh now". |
+| `controls/` | `WindowSelector`, `RefreshControl`, `SegmentedControl` | Native `<select>`, `<button>` and radio buttons for keyboard and screen-reader support. `SegmentedControl` serves both the theme toggle and the p95/average switch. `RefreshControl` shows "updated N seconds ago", the auto-refresh toggle and "Refresh now". |
 | `feedback/` | `Panel`, `LoadingState`, `EmptyState`, `ErrorState`, `StaleDataBanner` | `Panel` is the frame every section uses; it picks loading, empty, error or content, so each section handles all four states the same way. If a refresh fails after a success, the last data stays visible under `StaleDataBanner` instead of being replaced by an error. |
-| `kpis/` | `KpiGrid`, `KpiCard` | Takes `Summary`. Error rate counts `5xx` only; the card shows `4xx` separately, matching the backend's definition. |
-| `charts/` | `LatencyChart`, `StatusCodeChart`, `ChartTooltip` | `LatencyChart` has a p95/average toggle and one line per endpoint plus "All endpoints"; the X axis is time with the window's local-time bounds. `StatusCodeChart` is a bar chart coloured by class. Both have a text summary for screen readers. |
+| `kpis/` | `KpiGrid`, `KpiCard` | Takes `Summary`: requests, requests per minute, error rate, average and p95 latency, as a `<dl>`. Error rate counts `5xx` only; the card shows `4xx` separately, matching the backend's definition. As many columns as the panel fits; values step down a size in a narrow panel (container query). |
+| `charts/` | `LatencyPanel`, `LatencyChart`, `StatusCodeChart`, `ChartTable` | `LatencyPanel` holds the p95/average switch. `LatencyChart` draws one 2 px line per endpoint plus "All endpoints" in the text colour; empty buckets are gaps, and a bucket between two empty ones gets a dot. The X axis spans the window in local time; the tooltip lists every series at the hovered bucket, highest first. `StatusCodeChart` draws one thin bar per code, coloured by class and labelled with a symbol (✓ 2xx, ! 4xx, ✕ 5xx), with the class totals as text above. Legends are HTML beside the chart. Each chart has a screen-reader summary and a collapsed `ChartTable` with every value, which the lighter light-mode series need (see the palette validation). |
 | `tables/` | `EndpointTable`, `RecentRequestsTable`, `SortableHeader` | Client-side sorting with `aria-sort`; tables scroll horizontally inside their panel on narrow screens, never the page. |
 | `insights/` | *(later)* `InsightsPanel` | Labelled "AI-assisted analysis". Shows the provider and generation time, and a clear message when AI is not configured on the server. |
 
@@ -228,7 +230,7 @@ Tokens are named by purpose, not by value (`--color-text-muted`, never `--gray-5
 | Type | Five sizes (`--text-xs` … `--text-xl`), system font stack, no web font |
 | Other | `--radius-sm`, `--radius-md`, `--shadow-panel`, `--duration-fast` |
 
-Numbers in KPIs and tables use `font-variant-numeric: tabular-nums` so digits line up and do not shift on refresh.
+Numbers in tables, tooltips and the refresh label use `font-variant-numeric: tabular-nums`, so digits line up and do not shift on refresh. The large KPI values keep proportional figures, which read better at that size.
 
 ### Palette: Holi
 
