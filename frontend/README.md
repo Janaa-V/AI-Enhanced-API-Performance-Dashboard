@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: API layer in place.** The app, tooling, Holi design tokens and CI from build step 1 are in place, and step 2 added the typed contract: `openapi.json`, generated types, `models/` and `api/`, tested against MSW. `useTheme` and `ThemeToggle` still finish step 1, then the panels follow the [build order](#build-order). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: API layer and pure logic in place.** The app, tooling, Holi design tokens and CI from build step 1 are in place. Step 2 added the typed contract (`openapi.json`, generated types, `models/` and `api/`, tested against MSW), and step 3 the formatting, chart-data, sorting and window-preset functions. `useTheme` and `ThemeToggle` move to step 4 with the header, then the panels follow the [build order](#build-order). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -84,7 +84,7 @@ frontend/
     │
     ├── lib/                          Pure functions, unit-tested, no React
     │   ├── format.ts                 Latency, percentages, counts, local times; null -> "—"
-    │   ├── endpoints.ts              endpointKey() and endpointLabel(): "GET /demo/orders"
+    │   ├── endpoints.ts              endpointKey(): "GET /demo/orders"
     │   ├── chartData.ts              Trend buckets -> Recharts rows; status codes -> classes
     │   └── sort.ts                   Stable, null-last comparators for the tables
     │
@@ -164,10 +164,10 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 
 | Module | Responsibility |
 | --- | --- |
-| `format.ts` | `formatLatency` (`842 ms`, `1.24 s`), `formatPercent` (fraction to `3.2 %`), `formatCount`, `formatRate` (per minute), `formatTime` and `formatRelative` in the viewer's local time zone via `Intl`. Every function renders `null` as "—", never `0`. |
-| `endpoints.ts` | `endpointKey(method, endpoint)` for React keys, series names and colours, since `GET` and `POST /demo/orders` are different series. |
-| `chartData.ts` | `toLatencyRows(trend, metric)` pivots `overall` and `by_endpoint` buckets into one row per bucket start (epoch milliseconds), leaving `null` where a bucket was empty so Recharts draws a gap instead of a false zero. `toStatusClasses(codes)` groups codes by class for colouring. |
-| `sort.ts` | Comparators for the tables; `null` sorts last in both directions. |
+| `format.ts` | `formatLatency` (`4.2 ms`, `842 ms`, `1.24 s`), `formatPercent` (fraction to `3.2 %`), `formatCount` (`1,234`), `formatRate` (`8.0 req/min`), `formatTime` (24-hour, `15:34:05`, in the viewer's time zone) and `formatRelative` (`12 s ago`). Numbers use one fixed locale (`en-US`) so they read the same everywhere. Every function renders `null` as "—", never `0`, and a tiny non-zero value as `< 0.1 ms` or `< 0.1 %`, never as zero. |
+| `endpoints.ts` | `endpointKey({ method, endpoint })`, such as `GET /demo/orders`, for React keys, series names, colours and labels, since `GET` and `POST /demo/orders` are different series. |
+| `chartData.ts` | `toLatencyRows(trend, metric)` pivots `overall` and `by_endpoint` buckets into one row per bucket start (epoch milliseconds), leaving `null` where a bucket was empty so Recharts draws a gap instead of a false zero. Returns the rows and the endpoint series keys; every row carries every key. `toStatusClasses(codes)` groups codes by class (2xx, 4xx, 5xx), with each class's total, its codes for the tooltip, and a tone (`success`, `warning`, `danger`) for colouring. |
+| `sort.ts` | `sortBy(items, value, direction)` returns a sorted copy; `null` sorts last in both directions and ties keep their order. Timestamps are sorted as numbers, since ISO strings with and without fractional seconds do not sort correctly as text. |
 
 ### `components/`
 
@@ -378,16 +378,18 @@ npm run build          # production build in dist/
 
 Fixtures are typed as `MetricsResponse`, so a contract change breaks them at compile time too.
 
+Tests run in the `Asia/Kolkata` time zone (`vite.config.ts`), whatever the machine's zone. The results are the same everywhere, and the half-hour offset shows that times are converted from UTC.
+
 ## Build order
 
 Each step is one reviewable pull request that leaves the app working.
 
 | Step | Scope | Done when |
 | --- | --- | --- |
-| 1. Scaffold | Vite, TypeScript, ESLint, Stylelint, Prettier, Vitest, `config.ts`, `styles/` with light and dark tokens, `useTheme` and `ThemeToggle`, a `frontend-ci.yml` workflow (install, lint, format, types, tests, build, audit) | CI is green on an empty page that switches theme |
+| 1. Scaffold | Vite, TypeScript, ESLint, Stylelint, Prettier, Vitest, `config.ts`, `styles/` with light and dark tokens, a `frontend-ci.yml` workflow (install, lint, format, types, tests, build, audit) | CI is green on an empty page |
 | 2. Contract | `make openapi`, `openapi.json`, `schema.gen.ts`, `models/`, `api/` with tests, the freshness check in CI | `fetchMetrics` is typed end to end and tested against MSW |
 | 3. Pure logic | `lib/` and `models/windows.ts` with unit tests | Formatting and chart pivots are covered, including `null` and empty buckets |
-| 4. Data and controls | `hooks/`, `controls/`, `feedback/`, `layout/`, `App.tsx` | Switching windows and auto-refresh work against the real backend; every state renders |
+| 4. Data and controls | `hooks/` (including `useTheme`), `controls/`, `feedback/`, `layout/` (including `ThemeToggle`), `App.tsx` | Switching windows and auto-refresh work against the real backend; every state renders |
 | 5. KPIs and charts | `kpis/`, `charts/` | Charts match `/metrics` output for a generated traffic run |
 | 6. Tables | `tables/` | Sorting, `aria-sort` and narrow-screen scrolling work |
 | 7. Polish | Visual check of both themes at phone, tablet and desktop widths, contrast and accessibility pass, README screenshots | Usable at 360 px wide and by keyboard only, AA contrast in both themes |
