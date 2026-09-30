@@ -2,11 +2,11 @@
 
 A full-stack observability project: simulated API traffic is recorded in PostgreSQL, aggregated into latency, throughput and error metrics, and shown on a React dashboard. Plain-English summaries from an LLM are planned.
 
-> **Status: backend and dashboard complete; AI insights planned.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard shows KPI cards, latency and status-code charts and sortable tables from that one endpoint, refreshing itself, in light and dark themes. See [Status](#status).
+> **Status: backend and dashboard complete; AI insights planned.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard shows KPI cards, latency and status-code charts and sortable tables from that one endpoint, refreshing itself, in a dark theme by default with a light one a click away. See [Status](#status).
 
-![The dashboard in its light theme: KPI cards, a latency chart per endpoint, status codes, and the endpoint table](docs/images/dashboard-light.png)
+![The dashboard in its default dark theme: KPI cards, a latency chart per endpoint, status codes, and the endpoint table](docs/images/dashboard-dark.png)
 
-<sub>Measured from live demo traffic (`make traffic`). A [dark theme](docs/images/dashboard-dark.png) follows the operating system or a toggle.</sub>
+<sub>Measured from live demo traffic (`make traffic`). The header's toggle switches to the [light theme](docs/images/dashboard-light.png) or follows the operating system, and the choice is remembered.</sub>
 
 ## Built so far
 

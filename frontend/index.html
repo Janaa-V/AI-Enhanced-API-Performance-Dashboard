@@ -7,13 +7,18 @@
     <meta name="description" content="Latency, throughput and error metrics for a simulated API." />
     <title>API Performance Dashboard</title>
     <script>
-      // Apply a saved theme before the first paint, so a viewer who picked dark never sees a
-      // light flash while the app loads. Same key and values as src/hooks/useTheme.ts.
+      // Apply the theme before the first paint, so nobody sees the wrong theme flash while the
+      // app loads: the saved choice, or dark (the default) when nothing valid is saved. "system"
+      // sets nothing, so prefers-color-scheme decides. Same key, values and default as
+      // src/hooks/useTheme.ts.
+      let theme = 'dark'
       try {
-        const theme = localStorage.getItem('dashboard-theme')
-        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+        theme = localStorage.getItem('dashboard-theme') ?? 'dark'
       } catch {
-        // Storage blocked: the operating system's theme applies until the app loads.
+        // Storage blocked: the default applies.
+      }
+      if (theme !== 'system') {
+        document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark'
       }
     </script>
   </head>
