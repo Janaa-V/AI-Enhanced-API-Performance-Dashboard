@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: dashboard complete.** Steps 1 to 6 of the [build order](#build-order) are done: tooling and CI, the typed API contract, the pure formatting and chart-data functions, the data hooks, controls, theme toggle, page layout and loading, empty and error states, the KPI cards, latency chart and status-code chart, and the sortable endpoint and recent-requests tables, all working against the real backend. The polish pass (step 7) follows. The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: dashboard complete.** Steps 1 to 7 of the [build order](#build-order) are done: the typed API contract, pure formatting and chart-data functions, data hooks and controls, KPI cards, latency and status-code charts, sortable tables, and a polish pass (both themes at 360, 768 and 1280 px with no sideways page scroll, no axe-core WCAG 2.1 AA violations, and every control reachable and visibly focused by keyboard). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`). `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -172,7 +172,7 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 
 | Module | Responsibility |
 | --- | --- |
-| `format.ts` | `formatLatency` (`4.2 ms`, `842 ms`, `1.24 s`), `formatPercent` (fraction to `3.2 %`), `formatCount` (`1,234`), `formatRate` (`8.0 req/min`), `formatTime` (24-hour, `15:34:05`, in the viewer's time zone) and `formatRelative` (`12 s ago`). Numbers use one fixed locale (`en-US`) so they read the same everywhere. Every function renders `null` as "—", never `0`, and a tiny non-zero value as `< 0.1 ms` or `< 0.1 %`, never as zero. |
+| `format.ts` | `formatLatency` (`4.2 ms`, `842 ms`, `1.24 s`), `formatPercent` (fraction to `3.2 %`), `formatCount` (`1,234`), `formatRate` (`8.0`, with the unit in the label beside it), `formatTime` (24-hour, `15:34:05`, in the viewer's time zone) and `formatRelative` (`12 s ago`). Numbers use one fixed locale (`en-US`) so they read the same everywhere. Every function renders `null` as "—", never `0`, and a tiny non-zero value as `< 0.1 ms` or `< 0.1 %`, never as zero. |
 | `endpoints.ts` | `endpointKey({ method, endpoint })`, such as `GET /demo/orders`, for React keys, series names, colours and labels, since `GET` and `POST /demo/orders` are different series. |
 | `chartData.ts` | `toLatencyRows(trend, metric)` pivots `overall` and `by_endpoint` buckets into one row per bucket start (epoch milliseconds), leaving `null` where a bucket was empty so Recharts draws a gap instead of a false zero. Returns the rows and the endpoint series keys; every row carries every key. `toStatusClasses(codes)` groups codes by class (2xx, 4xx, 5xx), with each class's total, its codes for the tooltip, and a tone (`success`, `warning`, `danger`) for colouring. |
 | `sort.ts` | `sortBy(items, value, direction)` returns a sorted copy; `null` sorts last in both directions and ties keep their order. Timestamps are sorted as numbers, since ISO strings with and without fractional seconds do not sort correctly as text. |
