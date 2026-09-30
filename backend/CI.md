@@ -6,7 +6,7 @@ The GitHub Actions workflow is [Backend CI](../.github/workflows/backend-ci.yml)
 
 | Check | Behavior |
 | --- | --- |
-| Backend quality | Ruff lint, formatting, and Pyright |
+| Backend quality | Ruff lint, formatting, Pyright, and a check that `frontend/openapi.json` matches the API (`make openapi-check`) |
 | Backend unit tests | pytest on Python 3.12, 3.13, and 3.14, without a database |
 | Backend integration tests | pytest against a PostgreSQL 18 service container: migrations, constraints, and model/migration drift |
 | Backend dependency audit | pip-audit checks installed runtime and development dependencies |

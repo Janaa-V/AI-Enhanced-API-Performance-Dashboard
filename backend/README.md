@@ -40,6 +40,7 @@ curl 'http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1'
 | `make migration MSG="..."` | Generate a migration from model changes; always review it |
 | `make traffic` | Send live demo traffic to the running backend (`ARGS="--duration 300 --concurrency 10"`) |
 | `make backfill HOURS=24` | Write synthetic past rows so charts have history (invented, not measured) |
+| `make openapi` | Write the API schema to `frontend/openapi.json`, which the frontend's types are generated from; `make openapi-check` fails if it is out of date |
 | `make format` | Format with Ruff |
 | `make audit` | Scan dependencies for known vulnerabilities |
 | `make pre-commit-install` | Install Git hooks (Ruff, gitleaks, key detection) |
