@@ -50,6 +50,7 @@ flowchart LR
 
 ```text
 frontend/
+├── Makefile                          Every task as a make target, like backend/Makefile (make help)
 ├── index.html
 ├── package.json, package-lock.json   Dependencies (locked; npm ci in CI)
 ├── vite.config.ts                    Dev server on port 5173 (matches the backend's default CORS origin), Vitest config
@@ -334,19 +335,18 @@ Lime, marigold, turquoise, pink and tangerine sit below 3:1 on the cream surface
 The backend already builds its OpenAPI schema without a database, so the contract can be exported offline:
 
 1. **Backend:** `make openapi` (in `backend/`) writes `app.openapi()` to `frontend/openapi.json`.
-2. **Frontend:** `npm run generate:api` runs `openapi-typescript openapi.json -o src/api/schema.gen.ts`.
-3. **CI:** Backend CI runs `make openapi-check` and Frontend CI runs `npm run check:api`. Each regenerates in memory and fails if the committed file differs, so a backend change that alters the contract cannot merge without the frontend seeing it.
+2. **Frontend:** `make api-types` (`npm run generate:api`) runs `openapi-typescript openapi.json -o src/api/schema.gen.ts`.
+3. **CI:** Backend CI runs `make openapi-check` and Frontend CI runs `make api-check`. Each regenerates in memory and fails if the committed file differs, so a backend change that alters the contract cannot merge without the frontend seeing it.
 
 Both generated files are committed, so the frontend builds without a running backend. Prettier skips them, so they stay byte-for-byte what the generators write.
 
 ### Updating the API contract
 
-After changing a backend route or schema:
+After changing a backend route or schema, from `frontend/`:
 
 ```bash
-cd backend && make openapi              # refresh frontend/openapi.json
-cd ../frontend && npm run generate:api  # refresh src/api/schema.gen.ts
-npm run check                           # type errors show every place the change affects
+make contract   # backend's make openapi, then make api-types: refreshes both files
+make check      # type errors show every place the change affects
 ```
 
 Commit both files with the backend change.
@@ -363,17 +363,25 @@ The Vite dev server runs on port 5173, the backend's default `CORS_ORIGINS` entr
 
 ## Development
 
-Requires Node.js 20.19 or later (CI uses 24). From `frontend/`:
+Requires Node.js 20.19 or later (CI uses 24); every `make` target checks the version first. From `frontend/`:
 
 ```bash
-cp .env.example .env   # once; sets VITE_API_URL to the local backend
-npm install
-npm run dev            # http://localhost:5173, with the backend on http://127.0.0.1:8000
-npm run check          # API types, ESLint, Stylelint, Prettier, types and tests, as CI runs them
-npm run build          # production build in dist/
+make setup   # install dependencies, create .env if missing (points at the local backend)
+make run     # http://localhost:5173, with the backend on http://127.0.0.1:8000
 ```
 
-`npm run format` rewrites files with Prettier and `npm run test:watch` reruns tests on save. Stylelint rejects raw colours, pixel spacing, non-camelCase class names and `!important` outside `tokens.css`.
+| Command | Purpose |
+| --- | --- |
+| `make check` | API-type freshness, ESLint, Stylelint, Prettier, type check and tests, as CI runs them |
+| `make test` | Tests once; `make test-watch` reruns them on every save |
+| `make build` | Type-check and build the production bundle into `dist/`; `make preview` serves it |
+| `make sync` | Install dependencies exactly as locked (`npm ci`); `make install` may update the lockfile |
+| `make contract` | Refresh `openapi.json` from the backend, then the generated types |
+| `make format` | Format with Prettier |
+| `make audit` | Scan dependencies for known vulnerabilities |
+| `make clean` | Remove build output and tool caches; keeps `.env`, `node_modules` and `package-lock.json` |
+
+Run `make help` for the full list. Each target runs the matching `npm run` script, which also works directly. Frontend CI calls the same targets, so they cannot drift from what CI checks. Stylelint rejects raw colours, pixel spacing, non-camelCase class names and `!important` outside `tokens.css`.
 
 ## Testing
 

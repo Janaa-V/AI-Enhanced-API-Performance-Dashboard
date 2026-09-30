@@ -116,9 +116,9 @@ Then start the dashboard (requires Node.js 20.19 or later):
 
 ```bash
 cd frontend
-cp .env.example .env   # points the dashboard at http://127.0.0.1:8000
-npm install
-npm run dev            # http://localhost:5173
+make setup      # install dependencies, create .env pointing at http://127.0.0.1:8000
+make run        # http://localhost:5173
+make check      # API types, lint, format, types, tests
 ```
 
 The raw data is at `http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1`.
