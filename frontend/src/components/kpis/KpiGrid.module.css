@@ -1,0 +1,7 @@
+/* As many columns as fit the panel: two on a phone, five on a wide screen. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}

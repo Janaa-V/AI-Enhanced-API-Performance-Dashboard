@@ -4,6 +4,18 @@ import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 import { server } from './server'
 
+// jsdom has no matchMedia. Every query reports "no match": light theme, motion allowed.
+window.matchMedia = (query: string): MediaQueryList => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})
+
 // A request with no handler fails the test instead of silently reaching the network.
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })

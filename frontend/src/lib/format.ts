@@ -34,6 +34,19 @@ export function formatLatency(ms: number | null): string {
   return `${formatNumber(seconds, seconds < 9.995 ? 2 : 1)} s`
 }
 
+// Axis ticks are already round numbers, so they need no fixed decimals: 0, 250 ms, 1.5 s.
+export function formatLatencyAxis(ms: number): string {
+  if (ms === 0) return '0'
+  if (ms < 1000) return `${formatCompact(ms)} ms`
+  return `${formatCompact(ms / 1000)} s`
+}
+
+const compactFormat = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 1 })
+
+function formatCompact(value: number): string {
+  return compactFormat.format(value)
+}
+
 // A fraction from 0 to 1 as a percentage: 0.032 -> 3.2 %. A tiny non-zero rate is not shown as
 // 0.0 %, so a rare error is never hidden.
 export function formatPercent(fraction: number | null): string {

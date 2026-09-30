@@ -1,0 +1,45 @@
+.details {
+  font-size: var(--text-sm);
+}
+
+.summary {
+  inline-size: fit-content;
+  color: var(--color-accent-text);
+  cursor: pointer;
+}
+
+/* The table scrolls inside the panel; the page never scrolls sideways. */
+.scroll {
+  margin-block-start: var(--space-2);
+  overflow-x: auto;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.caption {
+  padding-block-end: var(--space-2);
+  color: var(--color-text-muted);
+  text-align: start;
+}
+
+.table th,
+.table td {
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--color-border);
+  text-align: end;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.table th:first-child {
+  text-align: start;
+}

@@ -1,13 +1,15 @@
+import { LatencyPanel } from './components/charts/LatencyPanel'
+import { StatusCodeChart } from './components/charts/StatusCodeChart'
 import { RefreshControl } from './components/controls/RefreshControl'
 import { WindowSelector } from './components/controls/WindowSelector'
 import { ErrorState } from './components/feedback/ErrorState'
 import { Panel, type PanelStatus } from './components/feedback/Panel'
 import { StaleDataBanner } from './components/feedback/StaleDataBanner'
 import { DashboardLayout } from './components/layout/DashboardLayout'
+import { KpiGrid } from './components/kpis/KpiGrid'
 import { Header } from './components/layout/Header'
 import { useDashboardControls } from './hooks/useDashboardControls'
 import { REFRESH_INTERVAL_MS, useMetrics } from './hooks/useMetrics'
-import { formatCount, formatRate } from './lib/format'
 
 // Calls useMetrics once and hands each panel its slice of the one response.
 function App() {
@@ -42,6 +44,8 @@ function App() {
   }
 
   const isEmpty = data?.summary.total_requests === 0
+  // The previous window's data, shown dimmed while the chosen one loads.
+  const busy = isPlaceholderData
   const status = (empty: boolean): PanelStatus => (!data ? 'loading' : empty ? 'empty' : 'ready')
 
   return (
@@ -56,14 +60,18 @@ function App() {
         )
       }
       kpis={
-        <Panel title="Overview" status={status(isEmpty)} loadingRows={1}>
-          {data && (
-            <p>
-              {formatCount(data.summary.total_requests)} requests in the last {preset.label} (
-              {formatRate(data.summary.requests_per_minute)}).
-            </p>
-          )}
+        // Never "empty": with no requests the cards show counts of 0 and "—" for the rest.
+        <Panel title={`Last ${preset.label}`} status={status(false)} busy={busy} loadingRows={2}>
+          {data && <KpiGrid summary={data.summary} />}
         </Panel>
+      }
+      charts={
+        <>
+          <LatencyPanel status={status(isEmpty)} busy={busy} data={data} />
+          <Panel title="Status codes" status={status(isEmpty)} busy={busy} loadingRows={4}>
+            {data && <StatusCodeChart codes={data.status_codes} />}
+          </Panel>
+        </>
       }
     />
   )

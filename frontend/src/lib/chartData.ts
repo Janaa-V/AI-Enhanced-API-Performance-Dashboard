@@ -5,6 +5,11 @@ import { endpointKey } from './endpoints'
 
 export type LatencyMetric = 'p95_latency_ms' | 'avg_latency_ms'
 
+export const LATENCY_METRIC_LABELS: Record<LatencyMetric, string> = {
+  p95_latency_ms: 'p95',
+  avg_latency_ms: 'Average',
+}
+
 // The series key for the all-endpoints line. Endpoint keys contain a space, so they never clash.
 export const OVERALL_KEY = 'overall'
 

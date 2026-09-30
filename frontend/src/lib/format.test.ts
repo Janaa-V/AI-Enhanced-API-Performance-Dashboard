@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatCount,
   formatLatency,
+  formatLatencyAxis,
   formatPercent,
   formatRate,
   formatRelative,
@@ -26,6 +27,19 @@ describe('formatLatency', () => {
     [12_345, '12.3 s'],
   ])('%s ms -> %s', (ms, expected) => {
     expect(formatLatency(ms)).toBe(expected)
+  })
+})
+
+describe('formatLatencyAxis', () => {
+  it.each([
+    [0, '0'],
+    [0.5, '0.5 ms'],
+    [250, '250 ms'],
+    [1000, '1 s'],
+    [1500, '1.5 s'],
+    [12_000, '12 s'],
+  ])('%s ms -> %s', (ms, expected) => {
+    expect(formatLatencyAxis(ms)).toBe(expected)
   })
 })
 

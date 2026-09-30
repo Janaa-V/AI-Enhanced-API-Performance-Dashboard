@@ -1,0 +1,39 @@
+.card {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* A large standalone number keeps proportional figures; tabular ones look loose at this size. */
+.value {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.detail {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* In a narrow panel (a phone), one step smaller, so "89 req/min" stays on one line. */
+@container (width < 30rem) {
+  .card {
+    padding: var(--space-3);
+  }
+
+  .value {
+    font-size: var(--text-lg);
+  }
+}
