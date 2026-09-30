@@ -46,6 +46,8 @@ jobs:
         run: make format-check
       - name: Check types
         run: make typecheck
+      - name: Check the OpenAPI snapshot is current
+        run: make openapi-check
 
   unit-tests:
     name: Backend unit tests (Python ${{ matrix.python-version }})
