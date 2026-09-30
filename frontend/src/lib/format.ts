@@ -60,10 +60,11 @@ export function formatCount(count: number | null): string {
   return count === null ? NO_VALUE : formatNumber(count, 0)
 }
 
-// Requests per minute: 8.0 req/min, 120 req/min.
+// Requests per minute, without a unit: the label beside it names it ("Requests per minute").
+// One decimal below 10, so a quiet API does not read as 0: 0.4, 8.0, 120.
 export function formatRate(perMinute: number | null): string {
   if (perMinute === null) return NO_VALUE
-  return `${formatNumber(perMinute, perMinute < 9.95 ? 1 : 0)} req/min`
+  return formatNumber(perMinute, perMinute < 9.95 ? 1 : 0)
 }
 
 const timeFormats = {
