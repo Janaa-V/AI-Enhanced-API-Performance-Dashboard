@@ -8,8 +8,13 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    // Tests never reach a real backend; this only satisfies config.ts.
-    env: { VITE_API_URL: 'http://api.test' },
+    env: {
+      // Tests never reach a real backend; this only satisfies config.ts.
+      VITE_API_URL: 'http://api.test',
+      // A fixed zone, with a half-hour offset and no daylight saving, so time formatting gives
+      // the same result on every machine and shows the UTC-to-local conversion.
+      TZ: 'Asia/Kolkata',
+    },
     restoreMocks: true,
     unstubEnvs: true,
   },
