@@ -2,7 +2,7 @@
 
 A full-stack observability project: simulated API traffic is recorded in PostgreSQL and aggregated into latency, throughput and error metrics. A React dashboard is next; plain-English summaries from an LLM are planned.
 
-> **Status: backend complete, frontend in progress.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard is scaffolded with its tooling, theme and CI; its panels are next. AI insights are planned. See [Status](#status).
+> **Status: backend complete, frontend in progress.** The backend records every demo request, serves aggregated metrics at `GET /metrics` and includes a traffic generator (release `v0.2.0-backend`). The React dashboard is scaffolded with its tooling, theme and CI, and has a typed API layer generated from the backend's OpenAPI schema; its panels are next. AI insights are planned. See [Status](#status).
 
 ## Built so far
 

@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: scaffolded.** The app, tooling, Holi design tokens and CI from build step 1 are in place; `useTheme` and `ThemeToggle` finish that step, then the panels follow the [build order](#build-order). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: API layer in place.** The app, tooling, Holi design tokens and CI from build step 1 are in place, and step 2 added the typed contract: `openapi.json`, generated types, `models/` and `api/`, tested against MSW. `useTheme` and `ThemeToggle` still finish step 1, then the panels follow the [build order](#build-order). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -104,7 +104,7 @@ frontend/
     └── test/
         ├── setup.ts                  Testing Library matchers, MSW server lifecycle
         ├── server.ts                 MSW handlers for /metrics (success, empty, 422, 503, network error)
-        └── fixtures/metrics.ts       Typed MetricsResponse fixtures: busy, empty, one endpoint failing
+        └── fixtures/metrics.ts       Typed MetricsResponse fixtures: busy and empty; more are added with the panels that need them
 ```
 
 ## Module responsibilities
@@ -128,7 +128,7 @@ components  ->  hooks  ->  api  ->  models
 
 | Module | Responsibility |
 | --- | --- |
-| `client.ts` | One Axios instance with `baseURL` from `config.ts` and a 10-second timeout. A response interceptor turns every failure into an `ApiError`. |
+| `client.ts` | One Axios instance with `baseURL` from `config.ts` and a 10-second timeout. A response interceptor turns every failure into an `ApiError`, except cancellation, which TanStack Query triggers on purpose and handles itself. |
 | `errors.ts` | `ApiError` with a `kind` the UI can branch on: `network` (backend unreachable), `timeout`, `validation` (FastAPI `422`, keeps the first `msg`, such as the "too many buckets" hint), `server` (the shared `{ error: { code, message } }` body, such as `service_unavailable`) and `unknown`. Messages are safe to show; raw responses are never rendered. |
 | `metrics.ts` | `fetchMetrics({ windowMinutes, bucketMinutes, recentLimit }, signal)` maps camelCase parameters to the query string and returns `MetricsResponse`. The `signal` lets TanStack Query cancel a request when the window changes. |
 | `analysis.ts` | *(later)* `requestAnalysis({ windowMinutes })`. Sends no prompt or measurements; the server computes them. |
@@ -324,13 +324,27 @@ Lime, marigold, turquoise, pink and tangerine sit below 3:1 on the cream surface
 
 The backend already builds its OpenAPI schema without a database, so the contract can be exported offline:
 
-1. **Backend:** a `make openapi` target writes `app.openapi()` to `frontend/openapi.json`.
+1. **Backend:** `make openapi` (in `backend/`) writes `app.openapi()` to `frontend/openapi.json`.
 2. **Frontend:** `npm run generate:api` runs `openapi-typescript openapi.json -o src/api/schema.gen.ts`.
-3. **CI:** regenerates both and fails if `git diff` is not empty, so a backend change that alters the contract cannot merge without the frontend seeing it.
+3. **CI:** Backend CI runs `make openapi-check` and Frontend CI runs `npm run check:api`. Each regenerates in memory and fails if the committed file differs, so a backend change that alters the contract cannot merge without the frontend seeing it.
 
-Both generated files are committed, so the frontend builds without a running backend.
+Both generated files are committed, so the frontend builds without a running backend. Prettier skips them, so they stay byte-for-byte what the generators write.
 
-`openapi-typescript` is not installed yet: version 7 declares TypeScript 5 as a peer dependency and the app uses TypeScript 6. Step 2 either uses a release that supports TypeScript 6 or runs the generator through `npx` without adding it to `package.json`.
+### Updating the API contract
+
+After changing a backend route or schema:
+
+```bash
+cd backend && make openapi              # refresh frontend/openapi.json
+cd ../frontend && npm run generate:api  # refresh src/api/schema.gen.ts
+npm run check                           # type errors show every place the change affects
+```
+
+Commit both files with the backend change.
+
+### TypeScript 6 and `openapi-typescript`
+
+`openapi-typescript` 7 declares TypeScript 5 as a peer dependency, and no release supports 6 yet. An `overrides` entry in `package.json` points it at the app's TypeScript instead. It is scoped to that one package, unlike `--legacy-peer-deps`, which would relax peer checks for everything, and it keeps the generator pinned in the lockfile, unlike running it through `npx`. The generator only prints TypeScript through the compiler API, and `check:api` in CI would catch any change in its output. Remove the override once a release supports TypeScript 6.
 
 ## Configuration
 
@@ -346,7 +360,7 @@ Requires Node.js 20.19 or later (CI uses 24). From `frontend/`:
 cp .env.example .env   # once; sets VITE_API_URL to the local backend
 npm install
 npm run dev            # http://localhost:5173, with the backend on http://127.0.0.1:8000
-npm run check          # ESLint, Stylelint, Prettier, types and tests, as CI runs them
+npm run check          # API types, ESLint, Stylelint, Prettier, types and tests, as CI runs them
 npm run build          # production build in dist/
 ```
 
