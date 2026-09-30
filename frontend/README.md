@@ -26,7 +26,7 @@ Every view handles loading, empty and error states, and the layout adapts from d
 | Charts | Recharts |
 | Styling | CSS Modules and CSS custom properties for theme tokens; no UI framework |
 | Testing | Vitest, React Testing Library, Mock Service Worker (MSW) |
-| Tooling | ESLint, Prettier, `tsc --noEmit`, `npm audit`, GitHub Actions |
+| Tooling | ESLint, Stylelint, Prettier, `tsc --noEmit`, `npm audit`, GitHub Actions |
 
 ## Data flow
 
@@ -54,7 +54,7 @@ frontend/
 ├── package.json, package-lock.json   Dependencies (locked; npm ci in CI)
 ├── vite.config.ts                    Dev server on port 5173 (matches the backend's default CORS origin), Vitest config
 ├── tsconfig.json                     strict, noUncheckedIndexedAccess
-├── eslint.config.js, .prettierrc
+├── eslint.config.js, stylelint.config.js, .prettierrc
 ├── .env.example                      VITE_API_URL=http://127.0.0.1:8000
 ├── openapi.json                      Backend contract snapshot (generated, committed)
 └── src/
@@ -78,6 +78,8 @@ frontend/
     │   ├── useMetrics.ts             useQuery wrapper: key, polling, previous data while switching windows
     │   ├── useDashboardControls.ts   Selected window and auto-refresh, mirrored in the URL query string
     │   ├── useNow.ts                 Ticking clock for "updated N seconds ago"
+    │   ├── useTheme.ts               Light, dark or system theme; sets data-theme on <html>
+    │   ├── useChartColors.ts         Resolved token colours for Recharts, re-read on theme change
     │   └── useAnalysis.ts            (later) useMutation wrapper for POST /analyze
     │
     ├── lib/                          Pure functions, unit-tested, no React
@@ -87,7 +89,7 @@ frontend/
     │   └── sort.ts                   Stable, null-last comparators for the tables
     │
     ├── components/                   One folder per dashboard section; component, CSS Module and test side by side
-    │   ├── layout/                   DashboardLayout, Header
+    │   ├── layout/                   DashboardLayout, Header, ThemeToggle
     │   ├── controls/                 WindowSelector, RefreshControl
     │   ├── feedback/                 Panel, LoadingState, EmptyState, ErrorState, StaleDataBanner
     │   ├── kpis/                     KpiGrid, KpiCard
@@ -96,8 +98,8 @@ frontend/
     │   └── insights/                 (later) InsightsPanel
     │
     ├── styles/
-    │   ├── tokens.css                Colours, spacing and type as CSS variables; light and dark themes
-    │   └── global.css                Reset and base element styles
+    │   ├── tokens.css                Design tokens as CSS variables; light and dark themes
+    │   └── global.css                Small reset, base typography, focus and reduced-motion rules
     │
     └── test/
         ├── setup.ts                  Testing Library matchers, MSW server lifecycle
@@ -190,6 +192,68 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | `422` | The first validation message; this means a preset is wrong, so it also logs to the console |
 | Refresh fails after data was shown | Last data stays, with `StaleDataBanner` ("Showing data from 10:42; refresh failed") |
 
+## Styling
+
+CSS Modules for each component and one shared set of design tokens as CSS custom properties. Vite supports both without extra dependencies, class names are scoped to their component, styles sit next to the component they belong to, and nothing runs at runtime.
+
+| Option | Why not |
+| --- | --- |
+| Tailwind | Another tool and long class lists in markup; charts still need colours in JavaScript |
+| CSS-in-JS (styled-components, Emotion) | Runtime cost, and the ecosystem is moving away from it |
+| Component library (MUI, Chakra) | Heavy, generic look, and fights custom chart styling |
+
+### Files
+
+| File | Contents |
+| --- | --- |
+| `styles/tokens.css` | Every colour, space, size, radius, shadow and duration, for both themes |
+| `styles/global.css` | Small reset, base typography, `:focus-visible` outline, `prefers-reduced-motion` rule; the only place global selectors are allowed |
+| `components/**/X.module.css` | One module per component, imported as `styles` and used as `styles.cardValue` |
+
+### Design tokens
+
+Tokens are named by purpose, not by value (`--color-text-muted`, never `--gray-500`), so a theme only redefines variables and components never change.
+
+| Group | Tokens |
+| --- | --- |
+| Colour | `--color-bg`, `--color-surface`, `--color-surface-raised`, `--color-border`, `--color-text`, `--color-text-muted`, `--color-accent` |
+| Status | `--color-success`, `--color-warning`, `--color-danger`, each with a `-subtle` background variant |
+| Chart series | `--color-series-1` … `--color-series-6`, distinguishable in both themes and for common colour-vision deficiencies |
+| Space | `--space-1` … `--space-8` on a 4 px base, in `rem` |
+| Type | Five sizes (`--text-xs` … `--text-xl`), system font stack, no web font |
+| Other | `--radius-sm`, `--radius-md`, `--shadow-panel`, `--duration-fast` |
+
+Numbers in KPIs and tables use `font-variant-numeric: tabular-nums` so digits line up and do not shift on refresh.
+
+### Themes
+
+- The default follows the operating system through `prefers-color-scheme`.
+- `ThemeToggle` offers light, dark and system. `useTheme` sets `data-theme` on `<html>` and remembers the choice in `localStorage`, with reads and writes wrapped so the page still works when storage is blocked.
+- `tokens.css` defines the light values on `:root`, the dark values under `prefers-color-scheme: dark` (unless `data-theme="light"`), and again under `[data-theme="dark"]`.
+- Recharts sets colours through SVG attributes, where CSS variables are not reliably resolved. `useChartColors` reads the resolved token values with `getComputedStyle` and reads them again when the theme changes, so charts use the same palette as the rest of the page.
+
+### Layout
+
+- Mobile first, with `min-width` media queries at two breakpoints: 640 px and 1024 px.
+- The page is a CSS grid: one column on phones; from 1024 px, KPIs in four columns, charts in two, tables full width.
+- Panels are size containers, and their contents use container queries (`@container`), so a KPI card or chart adapts to the panel's width, not the screen's.
+- Tables scroll horizontally inside their panel; the page itself never scrolls sideways.
+- Logical properties (`padding-inline`, `margin-block`) throughout.
+
+### Accessibility
+
+- Text and meaningful graphics meet WCAG AA contrast in both themes, checked for every token pair used together.
+- Status is never shown by colour alone: a `5xx` also carries a label or icon.
+- Every control has a visible `:focus-visible` outline.
+- `prefers-reduced-motion` disables transitions and chart animations.
+
+### Rules
+
+- camelCase class names; one module per component.
+- No global classes outside `global.css`, no `!important`, no raw colours or pixel spacing outside `tokens.css` (Stylelint enforces the last two).
+- Shared patterns are reused with `composes:` rather than copied.
+- Stylelint (`stylelint-config-standard` plus a CSS Modules config) runs locally and in CI; Prettier formats CSS.
+
 ## Contract and type generation
 
 The backend already builds its OpenAPI schema without a database, so the contract can be exported offline:
@@ -224,11 +288,11 @@ Each step is one reviewable pull request that leaves the app working.
 
 | Step | Scope | Done when |
 | --- | --- | --- |
-| 1. Scaffold | Vite, TypeScript, ESLint, Prettier, Vitest, `config.ts`, `styles/`, a `frontend-ci.yml` workflow (install, lint, format, types, tests, build, audit) | CI is green on an empty page |
+| 1. Scaffold | Vite, TypeScript, ESLint, Stylelint, Prettier, Vitest, `config.ts`, `styles/` with light and dark tokens, `useTheme` and `ThemeToggle`, a `frontend-ci.yml` workflow (install, lint, format, types, tests, build, audit) | CI is green on an empty page that switches theme |
 | 2. Contract | `make openapi`, `openapi.json`, `schema.gen.ts`, `models/`, `api/` with tests, the freshness check in CI | `fetchMetrics` is typed end to end and tested against MSW |
 | 3. Pure logic | `lib/` and `models/windows.ts` with unit tests | Formatting and chart pivots are covered, including `null` and empty buckets |
 | 4. Data and controls | `hooks/`, `controls/`, `feedback/`, `layout/`, `App.tsx` | Switching windows and auto-refresh work against the real backend; every state renders |
 | 5. KPIs and charts | `kpis/`, `charts/` | Charts match `/metrics` output for a generated traffic run |
 | 6. Tables | `tables/` | Sorting, `aria-sort` and narrow-screen scrolling work |
-| 7. Polish | Dark theme, responsive checks at phone width, accessibility pass, README screenshots | Usable at 360 px wide and by keyboard only |
+| 7. Polish | Visual check of both themes at phone, tablet and desktop widths, contrast and accessibility pass, README screenshots | Usable at 360 px wide and by keyboard only, AA contrast in both themes |
 | 8. AI insights *(later)* | `api/analysis.ts`, `useAnalysis`, `insights/` | Starts once `POST /analyze` exists in the backend |
