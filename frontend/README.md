@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: planned, not scaffolded.** The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure, modules and build order below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: scaffolded.** The app, tooling, Holi design tokens and CI from build step 1 are in place; `useTheme` and `ThemeToggle` finish that step, then the panels follow the [build order](#build-order). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`), so the folder structure and modules below are settled. `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
 
 ## What it will show
 
@@ -54,7 +54,7 @@ frontend/
 ├── package.json, package-lock.json   Dependencies (locked; npm ci in CI)
 ├── vite.config.ts                    Dev server on port 5173 (matches the backend's default CORS origin), Vitest config
 ├── tsconfig.json                     strict, noUncheckedIndexedAccess
-├── eslint.config.js, stylelint.config.js, .prettierrc
+├── eslint.config.js, stylelint.config.js, .prettierrc.json
 ├── .env.example                      VITE_API_URL=http://127.0.0.1:8000
 ├── openapi.json                      Backend contract snapshot (generated, committed)
 └── src/
@@ -98,8 +98,8 @@ frontend/
     │   └── insights/                 (later) InsightsPanel
     │
     ├── styles/
-    │   ├── tokens.css                Design tokens as CSS variables; light and dark themes
-    │   └── global.css                Small reset, base typography, focus and reduced-motion rules
+    │   ├── tokens.css                Design tokens as CSS variables; light and dark themes; reduced motion
+    │   └── global.css                Small reset, base typography and focus outline
     │
     └── test/
         ├── setup.ts                  Testing Library matchers, MSW server lifecycle
@@ -206,8 +206,8 @@ CSS Modules for each component and one shared set of design tokens as CSS custom
 
 | File | Contents |
 | --- | --- |
-| `styles/tokens.css` | Every colour, space, size, radius, shadow and duration, for both themes |
-| `styles/global.css` | Small reset, base typography, `:focus-visible` outline, `prefers-reduced-motion` rule; the only place global selectors are allowed |
+| `styles/tokens.css` | Every colour, space, size, radius, shadow and duration, for both themes. Under `prefers-reduced-motion` it sets `--duration-fast` to `0ms`, and every transition uses that token, so no `!important` override is needed |
+| `styles/global.css` | Small reset, base typography, `:focus-visible` outline; the only place global selectors are allowed |
 | `components/**/X.module.css` | One module per component, imported as `styles` and used as `styles.cardValue` |
 
 ### Design tokens
@@ -330,11 +330,27 @@ The backend already builds its OpenAPI schema without a database, so the contrac
 
 Both generated files are committed, so the frontend builds without a running backend.
 
+`openapi-typescript` is not installed yet: version 7 declares TypeScript 5 as a peer dependency and the app uses TypeScript 6. Step 2 either uses a release that supports TypeScript 6 or runs the generator through `npx` without adding it to `package.json`.
+
 ## Configuration
 
 `VITE_API_URL` sets the backend base URL, so local and deployed environments differ only by configuration. `config.ts` validates it once at startup and fails with a clear message if it is missing or not a URL. It is public: never place secrets in `VITE_*` variables. AI keys live only in the backend.
 
 The Vite dev server runs on port 5173, the backend's default `CORS_ORIGINS` entry, so local development needs no proxy. A router is deliberately left out; the URL query string holds the only state worth sharing, and a router can be added if the dashboard grows beyond one view.
+
+## Development
+
+Requires Node.js 20.19 or later (CI uses 24). From `frontend/`:
+
+```bash
+cp .env.example .env   # once; sets VITE_API_URL to the local backend
+npm install
+npm run dev            # http://localhost:5173, with the backend on http://127.0.0.1:8000
+npm run check          # ESLint, Stylelint, Prettier, types and tests, as CI runs them
+npm run build          # production build in dist/
+```
+
+`npm run format` rewrites files with Prettier and `npm run test:watch` reruns tests on save. Stylelint rejects raw colours, pixel spacing, non-camelCase class names and `!important` outside `tokens.css`.
 
 ## Testing
 
