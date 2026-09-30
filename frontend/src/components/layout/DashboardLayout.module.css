@@ -1,0 +1,22 @@
+.main {
+  display: grid;
+  gap: var(--space-4);
+  max-inline-size: 80rem;
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+  padding-block: var(--space-4) var(--space-7);
+}
+
+.kpis,
+.charts,
+.tables {
+  display: grid;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+@media (width >= 1024px) {
+  .charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

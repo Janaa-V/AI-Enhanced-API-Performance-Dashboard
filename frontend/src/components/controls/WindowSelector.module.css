@@ -1,0 +1,15 @@
+.field {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.select {
+  composes: button from '../../styles/shared.module.css';
+  padding-inline-end: var(--space-2);
+}

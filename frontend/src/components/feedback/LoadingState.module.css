@@ -1,0 +1,14 @@
+.skeleton {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bar {
+  block-size: var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--color-grid);
+}
+
+.bar:last-child {
+  inline-size: 60%;
+}
