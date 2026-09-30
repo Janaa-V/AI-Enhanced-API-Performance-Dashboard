@@ -27,8 +27,8 @@ describe('App', () => {
   it('shows the empty state for a window without traffic', async () => {
     server.use(metricsHandlers.empty)
     renderWithClient(<App />)
-    // Both charts say so; the KPI cards still show 0 requests and "—" for latency.
-    expect(await screen.findAllByText('No requests in this window')).toHaveLength(2)
+    // Both charts and both tables say so; the KPI cards still show 0 requests and "—".
+    expect(await screen.findAllByText('No requests in this window')).toHaveLength(4)
     const kpis = screen.getByRole('region', { name: 'Last 1 hour' })
     expect(within(kpis).getAllByText('—')).not.toHaveLength(0)
   })

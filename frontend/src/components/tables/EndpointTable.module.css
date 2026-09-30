@@ -1,0 +1,21 @@
+.endpoint {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-weight: 400;
+}
+
+.key {
+  flex: none;
+  align-self: center;
+  inline-size: var(--space-4);
+  block-size: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.method {
+  min-inline-size: 3.5em;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
