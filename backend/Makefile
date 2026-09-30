@@ -6,7 +6,7 @@ UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && ec
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration migrate migration traffic backfill clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration migrate migration traffic backfill openapi openapi-check clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
@@ -29,6 +29,8 @@ help:
 	  '  make migration MSG=text  Generate a migration from model changes; review it' \
   '  make traffic             Send live demo traffic to the running backend' \
   '  make backfill HOURS=24   Write synthetic past rows (invented, not measured)' \
+	  '  make openapi             Write the API schema to frontend/openapi.json' \
+	  '  make openapi-check       Fail if frontend/openapi.json is out of date' \
 	  '  make pre-commit          Run pre-commit hooks on all files' \
 	  '  make pre-commit-install  Install pre-commit Git hooks' \
 	  '  make clean-logs          Delete backend .log and numbered rotated log files' \
@@ -102,6 +104,12 @@ traffic: check-uv
 
 backfill: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.generate_traffic --backfill-hours "$(or $(HOURS),24)" $(ARGS)
+
+openapi: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.export_openapi
+
+openapi-check: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.export_openapi --check
 
 migrate: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run alembic upgrade head
