@@ -80,7 +80,7 @@ frontend/
     │   ├── useDashboardControls.ts   Selected window and auto-refresh, mirrored in the URL query string
     │   ├── useNow.ts                 Ticking clock for "updated N seconds ago"
     │   ├── useSortState.ts           A table's sorted column and direction
-    │   ├── useTheme.ts               Light, dark or system theme; sets data-theme on <html>
+    │   ├── useTheme.ts               Dark by default, or light or system; sets data-theme on <html>
     │   ├── useChartColors.ts         Resolved token colours for Recharts, re-read on theme change
     │   ├── usePrefersReducedMotion.ts  Switches chart animations off for reduced motion
     │   └── useAnalysis.ts            (later) useMutation wrapper for POST /analyze
@@ -167,7 +167,7 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 
 `queryClient.ts` centralises defaults (`staleTime` 10 seconds, the retry rule above) so tests build the same client with retries off. It also registers `ApiError` as TanStack Query's error type, so `query.error` is typed without casts.
 
-`useTheme` is backed by a small inline script in `index.html` that applies the saved theme before the first paint, so a viewer who picked dark never sees a light flash while the app loads.
+`useTheme` is backed by a small inline script in `index.html` that applies the saved theme, or dark when nothing valid is saved, before the first paint, so no viewer sees the wrong theme flash while the app loads. A test runs that script against every stored value, so it cannot drift from `useTheme`.
 
 ### `lib/`
 
@@ -303,8 +303,8 @@ Lime, marigold, turquoise, pink and tangerine sit below 3:1 on the cream surface
 
 ### Themes
 
-- The default follows the operating system through `prefers-color-scheme`.
-- `ThemeToggle` offers light, dark and system. `useTheme` sets `data-theme` on `<html>` and remembers the choice in `localStorage`, with reads and writes wrapped so the page still works when storage is blocked.
+- The default is the dark theme, the usual choice for a monitoring screen left open for long periods. `ThemeToggle` offers light, dark and system; system follows the operating system through `prefers-color-scheme`.
+- `useTheme` sets `data-theme` on `<html>` and remembers every choice in `localStorage`, system included: with nothing stored, the dark default applies. Reads and writes are wrapped, so when storage is blocked the page still works and simply starts dark each visit.
 - `tokens.css` defines the light values on `:root`, the dark values under `prefers-color-scheme: dark` (unless `data-theme="light"`), and again under `[data-theme="dark"]`.
 - Recharts sets colours through SVG attributes, where CSS variables are not reliably resolved. `useChartColors` reads the resolved token values with `getComputedStyle` and reads them again when the theme changes, so charts use the same palette as the rest of the page.
 
