@@ -216,14 +216,80 @@ Tokens are named by purpose, not by value (`--color-text-muted`, never `--gray-5
 
 | Group | Tokens |
 | --- | --- |
-| Colour | `--color-bg`, `--color-surface`, `--color-surface-raised`, `--color-border`, `--color-text`, `--color-text-muted`, `--color-accent` |
-| Status | `--color-success`, `--color-warning`, `--color-danger`, each with a `-subtle` background variant |
-| Chart series | `--color-series-1` … `--color-series-6`, distinguishable in both themes and for common colour-vision deficiencies |
+| Colour | `--color-bg`, `--color-surface`, `--color-surface-raised`, `--color-border`, `--color-text`, `--color-text-muted`, `--color-axis`, `--color-grid`, `--color-accent`, `--color-accent-text`, `--color-on-accent` |
+| Status | `--color-success`, `--color-warning`, `--color-danger`, each with a `-text` variant for words and a `-subtle` background variant |
+| Chart series | `--color-series-1` … `--color-series-8`, distinguishable in both themes and for common colour-vision deficiencies |
 | Space | `--space-1` … `--space-8` on a 4 px base, in `rem` |
 | Type | Five sizes (`--text-xs` … `--text-xl`), system font stack, no web font |
 | Other | `--radius-sm`, `--radius-md`, `--shadow-panel`, `--duration-fast` |
 
 Numbers in KPIs and tables use `font-variant-numeric: tabular-nums` so digits line up and do not shift on refresh.
+
+### Palette: Holi
+
+The theme is named after the festival of colours: eight saturated hues on a warm cream day theme and a near-black night theme. Every value below is final and goes into `tokens.css` as written.
+
+**Neutrals and accent**
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--color-bg` (page) | `#fbf0e4` | `#0b0b0c` |
+| `--color-surface` (panels, cards) | `#fffaf3` | `#141416` |
+| `--color-surface-raised` (tooltips, menus) | `#ffffff` | `#1c1c1f` |
+| `--color-border` | `#e7dccd` | `#2a2a2e` |
+| `--color-text` | `#1f1633` | `#f5f5f4` |
+| `--color-text-muted` | `#62577a` | `#b4b2ad` |
+| `--color-axis` (ticks, axis labels) | `#8a7f9e` | `#85837e` |
+| `--color-grid` (chart gridlines) | `#efe4d6` | `#1f1f22` |
+| `--color-accent` (buttons, focus ring) | `#c8007f` | `#ff5cc0` |
+| `--color-accent-text` (links, selected text) | `#b3006f` | `#ff7ccd` |
+| `--color-on-accent` (text on accent) | `#ffffff` | `#141416` |
+
+A thin decorative strip across the top of the header runs through series 1, 8, 4, 2 and 7 (fuchsia, tangerine, marigold, lime, turquoise). It carries no meaning, so it is exempt from contrast rules.
+
+**Chart series**, assigned in this fixed order:
+
+| Slot | Colour | Light | Dark | Used for |
+| --- | --- | --- | --- | --- |
+| 1 | Fuchsia | `#e10095` | `#eb009b` | `GET /demo/users` |
+| 2 | Lime | `#84c900` | `#6da600` | `GET /demo/orders` |
+| 3 | Azure | `#007dd6` | `#008ff4` | `POST /demo/orders` |
+| 4 | Marigold | `#efa200` | `#c78600` | `GET /demo/products` |
+| 5 | Pink | `#ff5799` | `#ff288c` | `GET /demo/search` |
+| 6 | Violet | `#8700ec` | `#9c44ff` | `GET /demo/reports` |
+| 7 | Turquoise | `#00beaf` | `#00a99b` | Spare |
+| 8 | Tangerine | `#f56600` | `#e25e00` | Spare |
+
+The "All endpoints" line uses `--color-text`, so it reads as the reference and never competes with a series.
+
+**Status**, fixed and never reused for series:
+
+| Token | Light fill | Light text | Dark (fill and text) |
+| --- | --- | --- | --- |
+| `--color-success` | `#00ae64` | `#007742` | `#00d27a` |
+| `--color-warning` | `#fcab00` | `#8d5e00` | `#ffbe3d` |
+| `--color-danger` | `#ef0028` | `#bc001d` | `#ff5352` |
+
+`-subtle` backgrounds are the fill at 14 % opacity (`color-mix(in srgb, var(--color-success) 14%, transparent)`). The status-code chart colours 2xx, 4xx and 5xx with these tokens; the latency chart uses series tokens only, so the two never meet in one chart.
+
+**Rules for the palette**
+
+- A series colour follows the endpoint, not its rank: `endpointKey()` maps each method and route to a fixed slot, so filtering or sorting never repaints the survivors.
+- More than eight series fold into "Other" rather than generating a new colour.
+- Series colours never colour text; labels and values use the text tokens, with a coloured mark beside them.
+- Status always comes with a label or icon, never colour alone.
+
+**Validation**, run with an OKLCH lightness, chroma, colour-vision (Machado 2009 protanopia and deuteranopia) and contrast checker:
+
+| Check | Light | Dark | Requirement |
+| --- | --- | --- | --- |
+| Worst neighbouring pair, colour-blind vision | ΔE 15.9 | ΔE 11.7 | at least 8 |
+| Worst neighbouring pair, normal vision | ΔE 24.0 | ΔE 25.3 | at least 15 |
+| First three slots, any pair | pass | pass | for charts where any two marks can touch |
+| Series vs surface contrast | 5 of 8 below 3:1 | all 8 at least 3:1 | 3:1, or a legend and table view |
+| Text, muted text, accent text, status text vs surface | at least 4.5:1 | at least 4.5:1 | 4.5:1 |
+
+Lime, marigold, turquoise, pink and tangerine sit below 3:1 on the cream surface, which is expected for vivid yellows and greens on a light background. Every chart therefore keeps its legend, tooltip and table view; no value is ever shown by a light-mode series colour alone.
 
 ### Themes
 
@@ -242,7 +308,7 @@ Numbers in KPIs and tables use `font-variant-numeric: tabular-nums` so digits li
 
 ### Accessibility
 
-- Text and meaningful graphics meet WCAG AA contrast in both themes, checked for every token pair used together.
+- Text meets WCAG AA (4.5:1) in both themes. Chart marks meet 3:1 in dark mode; in light mode the lighter series rely on the legend, tooltip and table view (see the palette validation above).
 - Status is never shown by colour alone: a `5xx` also carries a label or icon.
 - Every control has a visible `:focus-visible` outline.
 - `prefers-reduced-motion` disables transitions and chart animations.
