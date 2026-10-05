@@ -378,10 +378,21 @@ make run     # http://localhost:5173, with the backend on http://127.0.0.1:8000
 | `make sync` | Install dependencies exactly as locked (`npm ci`); `make install` may update the lockfile |
 | `make contract` | Refresh `openapi.json` from the backend, then the generated types |
 | `make format` | Format with Prettier |
-| `make audit` | Scan dependencies for known vulnerabilities |
+| `make audit` | Scan dependencies for known vulnerabilities: production strictly, then everything against the reviewed exceptions (see below) |
 | `make clean` | Remove build output and tool caches; keeps `.env`, `node_modules` and `package-lock.json` |
 
 Run `make help` for the full list. Each target runs the matching `npm run` script, which also works directly. Frontend CI calls the same targets, so they cannot drift from what CI checks. Stylelint rejects raw colours, pixel spacing, non-camelCase class names and `!important` outside `tokens.css`.
+
+### Dependency audit
+
+`make audit` (and CI) runs two steps:
+
+1. `npm audit --omit=dev` checks what ships to the browser. It allows **no exceptions**.
+2. `npm run audit:all` (`scripts/audit.mjs`) checks every dependency, development tools included, and fails on any advisory not listed in `audit-allowlist.json`.
+
+An exception is for an advisory with no fix that cannot affect the app, for example one reached only through a development tool. Each entry needs the advisory's GHSA id, the package, the reason and a `reviewBy` date at most 90 days ahead; once that date passes the audit fails until someone re-checks it. Entries no longer reported are printed as warnings so the list stays short. This follows the rule in `backend/CI.md`: specific identifier, rationale and review date, never a global suppression.
+
+Current exception: `braces` (GHSA-vfj7-8cjw-p6xm), reached only through Stylelint linting our own CSS, with no patched version yet.
 
 ## Testing
 
