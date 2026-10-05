@@ -10,7 +10,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Done |
 | 4. Demonstration workflow | Bounded traffic generator (live and synthetic backfill), `make traffic` | Done |
-| 5. AI insights | Provider interface, one adapter, `POST /analyze` | Planned |
+| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | In progress: degraded mode, contract and input done |
 | 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
 Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; `/health`, the demo routes and `/metrics` exist today.
@@ -179,6 +179,20 @@ The trend groups rows with PostgreSQL's `date_bin`, which returns only buckets t
 
 Accepts an optional `window_minutes`. The server computes the metrics itself; clients cannot supply prompts or measurements. Returns the window, provider, generation time and analysis text. An empty window returns `no_data` without calling the provider. Missing configuration, timeouts, rate limits and malformed provider output return documented errors that expose no credentials or upstream details. Calls have a timeout, bounded input and output, a short cache and one in-flight request per window.
 
+**Contract (built; the route is not yet).** `app/schemas/analysis.py`:
+
+- Request: `{"window_minutes": 60}`, optional (defaults to `METRICS_WINDOW_MINUTES`), 1–1440. Unknown fields are rejected, so a client cannot slip in a prompt.
+- Response: one shape for both outcomes. `status` is `ok` or `no_data`; `window`, `generated_at` and `cached` are always present; `provider`, `model` and `analysis` are present for `ok` and null for `no_data`. A validator enforces that pairing.
+- `analysis` is also the JSON schema the provider must follow: a `headline` (up to 200 characters), up to 5 `observations` (each with an `endpoint` such as `GET /demo/reports`, or null for the whole API, a `metric` from a fixed list, and up to 300 characters of text), up to 3 `hypotheses` with `confidence` of `low` or `medium` only, and up to 3 `next_steps`. Text is trimmed and never blank; unknown fields are rejected.
+
+**What the model sees (built).** `app/services/analysis/input.py` reads one read-only snapshot, like `/metrics`, and builds about 600 tokens of aggregates, never individual requests:
+
+- the window, the summary and the status-code counts;
+- each endpoint, named by method and route, with its totals and, for the **first and second half of the window**, its request count, error rate and p95, so the model can tell "getting worse" from "always slow". The halves are half-open and touch at the midpoint, so every row counts once.
+- numbers rounded to 0.1 ms and three decimals for rates, to save tokens and give values the model can quote exactly; `/metrics` stays unrounded.
+
+Checked on a degraded backfill (`--degrade reports --degrade-minutes 30`): the input showed reports' p95 rising from 1441 to 4155 ms and its error rate from 5.5% to 24.6% between the halves, with every other endpoint flat.
+
 ## Simulation and recording
 
 - Only `/demo/*` requests are recorded; `/health`, `/metrics`, `/analyze` and docs are excluded.
@@ -297,7 +311,7 @@ backend/
 └── CI.md                          Automated checks
 ```
 
-Planned additions: `api/routers/analysis.py`, `services/{ai_analysis,ai_providers}.py`.
+AI analysis: `schemas/analysis.py` (contract) and `services/analysis/input.py` (model input) exist; planned additions are `services/analysis/` providers, prompt and service, and `api/routers/analysis.py`.
 
 ## Deployment assumptions
 
