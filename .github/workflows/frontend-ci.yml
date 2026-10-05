@@ -1,0 +1,127 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  quality:
+    name: Frontend quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check generated API types match openapi.json
+        run: make api-check
+      - name: Lint TypeScript
+        run: make lint
+      - name: Lint CSS
+        run: make lint-css
+      - name: Check formatting
+        run: make format-check
+      - name: Check types
+        run: make typecheck
+
+  tests:
+    name: Frontend tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run tests
+        run: make test
+
+  build:
+    name: Frontend build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Build-time value only; the build succeeds without a running backend.
+      VITE_API_URL: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build
+        run: make build
+
+  dependency-audit:
+    name: Frontend dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Audit runtime and development dependencies
+        run: make audit
+
+  required:
+    name: Frontend CI passed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: ${{ always() }}
+    needs: [quality, tests, build, dependency-audit]
+    steps:
+      - name: Require every check to succeed
+        working-directory: .
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.tests.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+        run: |
+          for result in "$QUALITY_RESULT" "$TEST_RESULT" "$BUILD_RESULT" "$AUDIT_RESULT"; do
+            if [ "$result" != success ]; then
+              echo "A required frontend check failed, was cancelled, or was skipped."
+              exit 1
+            fi
+          done

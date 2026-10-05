@@ -1,0 +1,51 @@
+.figure {
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.classItem {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Legends mirror the mark: a small rectangle for bars. */
+.swatch {
+  display: inline-block;
+  flex: none;
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+  border-radius: 2px;
+}
+
+.chart {
+  min-inline-size: 0;
+}
+
+.tooltip {
+  display: grid;
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-panel);
+  font-size: var(--text-xs);
+}
+
+.tooltipName {
+  color: var(--color-text-muted);
+}

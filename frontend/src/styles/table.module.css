@@ -1,0 +1,50 @@
+/* The data tables' shared look. Tables scroll inside their panel; the page never scrolls sideways. */
+
+/* Scroll shadows: a soft edge appears on a side only while there is more table that way. The
+   surface-coloured covers scroll with the content and hide the shadows at either end. */
+.scroll {
+  --edge: color-mix(in srgb, var(--color-text) 14%, transparent);
+
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--color-surface) 40%, transparent) left / var(--space-6) 100%
+      no-repeat local,
+    linear-gradient(to left, var(--color-surface) 40%, transparent) right / var(--space-6) 100%
+      no-repeat local,
+    linear-gradient(to right, var(--edge), transparent) left / var(--space-3) 100% no-repeat scroll,
+    linear-gradient(to left, var(--edge), transparent) right / var(--space-3) 100% no-repeat scroll;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table th,
+.table td {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  text-align: start;
+
+  /* Mixed fonts (monospace methods) line up on their text, not their boxes. */
+  vertical-align: baseline;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  vertical-align: bottom;
+}
+
+.table tbody tr:last-child > * {
+  border-block-end: 0;
+}
+
+/* Qualified by .table so it outranks the cell rule above. */
+.table .number {
+  text-align: end;
+}

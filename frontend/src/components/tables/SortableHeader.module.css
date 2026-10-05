@@ -1,0 +1,33 @@
+/* Looks like header text; the whole header is the hit target. */
+.button {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+}
+
+.button:hover {
+  color: var(--color-text);
+}
+
+.arrow {
+  color: var(--color-accent-text);
+  font-size: var(--text-xs);
+}
+
+/* Shown faintly on hover, so unsorted columns still look sortable. */
+.arrowIdle {
+  composes: arrow;
+  visibility: hidden;
+}
+
+.button:hover .arrowIdle,
+.button:focus-visible .arrowIdle {
+  visibility: visible;
+  color: var(--color-text-muted);
+}

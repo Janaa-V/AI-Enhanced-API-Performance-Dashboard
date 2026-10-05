@@ -1,0 +1,41 @@
+.panel {
+  /* Contents adapt to the panel's width, not the screen's (@container in child modules). */
+  container-type: inline-size;
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-inline-size: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.body {
+  min-inline-size: 0;
+}
+
+.busy {
+  opacity: 0.55;
+  transition: opacity var(--duration-fast);
+}

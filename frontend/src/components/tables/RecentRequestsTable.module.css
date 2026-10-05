@@ -1,0 +1,14 @@
+.method {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.serverError {
+  color: var(--color-danger-text);
+  font-weight: 600;
+}
+
+.clientError {
+  color: var(--color-warning-text);
+}

@@ -1,0 +1,1172 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "API Performance Dashboard",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/users": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_demo_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server failed to process the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/products": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "List Products",
+        "operationId": "list_products_demo_products_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server failed to process the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/orders": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "List Orders",
+        "operationId": "list_orders_demo_orders_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdersResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server failed to process the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Create Order",
+        "operationId": "create_order_demo_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedOrder"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server failed to process the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/search": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Search",
+        "operationId": "search_demo_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "An upstream service took too long to respond.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/reports": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Get Report",
+        "operationId": "get_report_demo_reports_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server failed to process the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "An upstream service took too long to respond.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Get Metrics",
+        "operationId": "get_metrics_metrics_get",
+        "parameters": [
+          {
+            "name": "window_minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 1440,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window length; defaults to METRICS_WINDOW_MINUTES.",
+              "title": "Window Minutes"
+            },
+            "description": "Window length; defaults to METRICS_WINDOW_MINUTES."
+          },
+          {
+            "name": "bucket_minutes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 1,
+              "default": 5,
+              "title": "Bucket Minutes"
+            }
+          },
+          {
+            "name": "recent_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Recent Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateOrderRequest": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "User Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_id",
+          "items"
+        ],
+        "title": "CreateOrderRequest"
+      },
+      "CreatedOrder": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "status",
+          "total",
+          "items"
+        ],
+        "title": "CreatedOrder"
+      },
+      "EndpointMetrics": {
+        "properties": {
+          "total_requests": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Requests"
+          },
+          "server_errors": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Server Errors"
+          },
+          "client_errors": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Errors"
+          },
+          "error_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Rate"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_requests",
+          "server_errors",
+          "client_errors",
+          "error_rate",
+          "avg_latency_ms",
+          "p95_latency_ms",
+          "method",
+          "endpoint"
+        ],
+        "title": "EndpointMetrics"
+      },
+      "EndpointTrend": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/TrendBucket"
+            },
+            "type": "array",
+            "title": "Buckets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "endpoint",
+          "buckets"
+        ],
+        "title": "EndpointTrend"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LatencyTrend": {
+        "properties": {
+          "overall": {
+            "items": {
+              "$ref": "#/components/schemas/TrendBucket"
+            },
+            "type": "array",
+            "title": "Overall"
+          },
+          "by_endpoint": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointTrend"
+            },
+            "type": "array",
+            "title": "By Endpoint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overall",
+          "by_endpoint"
+        ],
+        "title": "LatencyTrend"
+      },
+      "MetricsResponse": {
+        "properties": {
+          "window": {
+            "$ref": "#/components/schemas/MetricsWindow"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointMetrics"
+            },
+            "type": "array",
+            "title": "Endpoints"
+          },
+          "status_codes": {
+            "items": {
+              "$ref": "#/components/schemas/StatusCodeCount"
+            },
+            "type": "array",
+            "title": "Status Codes"
+          },
+          "latency_trend": {
+            "$ref": "#/components/schemas/LatencyTrend"
+          },
+          "recent_requests": {
+            "items": {
+              "$ref": "#/components/schemas/RecentRequest"
+            },
+            "type": "array",
+            "title": "Recent Requests"
+          }
+        },
+        "type": "object",
+        "required": [
+          "window",
+          "summary",
+          "endpoints",
+          "status_codes",
+          "latency_trend",
+          "recent_requests"
+        ],
+        "title": "MetricsResponse"
+      },
+      "MetricsWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Window Minutes"
+          },
+          "bucket_minutes": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Bucket Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "window_minutes",
+          "bucket_minutes"
+        ],
+        "title": "MetricsWindow"
+      },
+      "Order": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "total",
+          "status"
+        ],
+        "title": "Order"
+      },
+      "OrderItem": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Product Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_id",
+          "quantity"
+        ],
+        "title": "OrderItem"
+      },
+      "OrdersResponse": {
+        "properties": {
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            },
+            "type": "array",
+            "title": "Orders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orders"
+        ],
+        "title": "OrdersResponse"
+      },
+      "Product": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "price"
+        ],
+        "title": "Product"
+      },
+      "ProductsResponse": {
+        "properties": {
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            },
+            "type": "array",
+            "title": "Products"
+          }
+        },
+        "type": "object",
+        "required": [
+          "products"
+        ],
+        "title": "ProductsResponse"
+      },
+      "RecentRequest": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint"
+          },
+          "status_code": {
+            "type": "integer",
+            "maximum": 599.0,
+            "minimum": 100.0,
+            "title": "Status Code"
+          },
+          "latency_ms": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Latency Ms"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "method",
+          "endpoint",
+          "status_code",
+          "latency_ms",
+          "started_at"
+        ],
+        "title": "RecentRequest"
+      },
+      "ReportResponse": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ReportRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "period",
+          "rows"
+        ],
+        "title": "ReportResponse"
+      },
+      "ReportRow": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "ReportRow"
+      },
+      "SearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "total",
+          "results"
+        ],
+        "title": "SearchResponse"
+      },
+      "StatusCodeCount": {
+        "properties": {
+          "status_code": {
+            "type": "integer",
+            "maximum": 599.0,
+            "minimum": 100.0,
+            "title": "Status Code"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status_code",
+          "count"
+        ],
+        "title": "StatusCodeCount"
+      },
+      "Summary": {
+        "properties": {
+          "total_requests": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Requests"
+          },
+          "server_errors": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Server Errors"
+          },
+          "client_errors": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Errors"
+          },
+          "error_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Rate"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "requests_per_minute": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Requests Per Minute"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_requests",
+          "server_errors",
+          "client_errors",
+          "error_rate",
+          "avg_latency_ms",
+          "p95_latency_ms",
+          "requests_per_minute"
+        ],
+        "title": "Summary"
+      },
+      "TrendBucket": {
+        "properties": {
+          "total_requests": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Requests"
+          },
+          "server_errors": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Server Errors"
+          },
+          "client_errors": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Client Errors"
+          },
+          "error_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Rate"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_requests",
+          "server_errors",
+          "client_errors",
+          "error_rate",
+          "avg_latency_ms",
+          "p95_latency_ms",
+          "start",
+          "end"
+        ],
+        "title": "TrendBucket"
+      },
+      "User": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "User"
+      },
+      "UsersResponse": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array",
+            "title": "Users"
+          }
+        },
+        "type": "object",
+        "required": [
+          "users"
+        ],
+        "title": "UsersResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

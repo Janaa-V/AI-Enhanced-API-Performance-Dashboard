@@ -1,0 +1,37 @@
+.card {
+  /* The value's size follows the card's own width (below). */
+  container-type: inline-size;
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* A large standalone number keeps proportional figures; tabular ones look loose at this size. */
+.value {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.detail {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* In a narrow card (two per row on a phone), one step smaller. */
+@container (width < 12rem) {
+  .value {
+    font-size: var(--text-lg);
+  }
+}

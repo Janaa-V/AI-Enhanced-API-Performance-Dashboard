@@ -1,0 +1,28 @@
+/* Columns by the panel's width, so five cards never leave one alone on a row: on a phone the
+   first card (requests) spans both columns (1 + 2 + 2), then 3 + 2 on a tablet, then 5. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.grid > :first-child {
+  grid-column: 1 / -1;
+}
+
+@container (width >= 36rem) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid > :first-child {
+    grid-column: auto;
+  }
+}
+
+@container (width >= 56rem) {
+  .grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
