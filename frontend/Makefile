@@ -92,7 +92,8 @@ test-watch: check-node
 	cd "$(FRONTEND_DIR)" && "$(NPM)" run test:watch
 
 audit: check-node
-	cd "$(FRONTEND_DIR)" && "$(NPM)" audit
+	cd "$(FRONTEND_DIR)" && "$(NPM)" audit --omit=dev
+	cd "$(FRONTEND_DIR)" && "$(NPM)" run audit:all
 
 api-types: check-node
 	cd "$(FRONTEND_DIR)" && "$(NPM)" run generate:api
