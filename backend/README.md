@@ -95,6 +95,7 @@ Settings are validated at startup by `app/config.py` (Pydantic). Values come fro
 | `METRICS_WINDOW_MINUTES` | `60` | Default reporting window, 1–1440 |
 | `SIMULATION_LATENCY_SCALE` | `1` | Multiplier for simulated delays; `0` removes them |
 | `SIMULATION_FAILURE_SCALE` | `1` | Multiplier for simulated failure rates; `0` turns failures off |
+| `SIMULATION_DEGRADED_ENDPOINT` | unset | Demo only: one profile name (for example `reports`) to make slow and flaky; see [Degraded demo mode](#degraded-demo-mode) |
 | `AI_PROVIDER` | `disabled` | `disabled`, `gemini` or `groq` |
 | `AI_API_KEY`, `AI_MODEL` | empty | Provider credentials and model, backend-only |
 | `AI_TIMEOUT_SECONDS` | `30` | Provider timeout, above 0 and at most 120 |
@@ -193,6 +194,7 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 - Each endpoint has a profile in `app/services/simulation/profiles.py`: a latency range, a failure probability and the server-error codes a failure chooses from. Latency is uniform within the range; a failing request still waits its full time first, like a real timeout.
 - `Simulator` (`simulator.py`) separates the decision from the side effects: `plan(profile)` is a pure function that returns the delay and outcome, and `simulate(profile)` waits and raises. It takes any profile, and receives its random generator and sleep function as parameters, so tests force any outcome and never wait in real time.
 - Two settings scale every profile (`SIMULATION_LATENCY_SCALE`, `SIMULATION_FAILURE_SCALE`), for example failures off for a quiet demo.
+- A third setting degrades one endpoint on purpose; see [Degraded demo mode](#degraded-demo-mode).
 - A traffic generator (`scripts/generate_traffic.py`) gives the dashboard data; see below.
 
 | Endpoint | Latency | Failure rate | Failure statuses |
@@ -203,6 +205,28 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 | `search` | 80–400 ms | 3% | 503, 504 |
 | `reports` | 400–1500 ms | 8% | 504, 500 |
 | `orders_create` (`POST /demo/orders`) | 100–400 ms | 6% | 500, 503 |
+
+### Degraded demo mode
+
+Steady traffic gives a healthy dashboard with nothing to explain. `SIMULATION_DEGRADED_ENDPOINT` names one profile to make visibly unhealthy, so the dashboard (and later the AI analysis) has a real problem to find:
+
+```bash
+SIMULATION_DEGRADED_ENDPOINT=reports make run   # or set it in .env
+make traffic                                    # in a second terminal
+```
+
+- The degraded endpoint is **3 times slower** and fails **at least 25%** of requests, with its usual failure statuses (`DEMO_DEGRADATION` in `profiles.py`). `reports` goes from 400–1500 ms and 8% to 1200–4500 ms and 25%. A degradation never makes an endpoint faster or more reliable.
+- `degrade(profile)` returns a new profile; the defaults stay read-only. The `Simulator` receives the profile to degrade and swaps it in `plan()` only for that exact object (an identity check), so an equal profile elsewhere is never affected and the routes stay unchanged.
+- The server logs a warning at startup ("Demo degradation is on: reports is 3x slower ...") so a demo setting is never mistaken for a real regression. Unknown names are rejected when the settings load, and a test keeps the allowed names in step with the profiles.
+- Checked on the real server: a 25-second run with `reports` degraded gave it a p95 of 4255 ms and a 22.7% error rate in `/metrics`, while every other endpoint stayed in its normal range.
+
+For history that **gets worse partway through**, as a real incident would, degrade only the end of a backfill:
+
+```bash
+make backfill HOURS=2 ARGS="--degrade reports --degrade-minutes 30"
+```
+
+Rows before the last 30 minutes use the normal profile and rows after it the degraded one; other endpoints are unaffected. `--degrade` only applies to backfill: live traffic follows the server's own setting.
 
 ### What a recorded request looks like
 
@@ -222,6 +246,8 @@ Checked on the real server with `curl`: one row per demo call; `/health`, `/docs
 **Live (default): `make traffic`.** Workers send real HTTP requests to a running server until the time is up, pausing 50–300 ms between requests like users would. Every row is measured by the real middleware. The mix is weighted like a small shop: users 30%, products 25%, order list 20%, search 12% (random terms), orders created 8% and reports 5%. One order in ten has a deliberately invalid body (unknown product, zero quantity or a misspelt field), so client errors (`422`) show on the dashboard. At the end it prints requests by status and a client-side p95 per endpoint, interpolated like `percentile_cont`, so it can be compared with `/metrics`; the client figure is a few milliseconds higher because it includes HTTP overhead. Bounds: `--duration` 1–3600 s (default 60), `--concurrency` 1–50 (default 5). It checks `/health` first, and it refuses any host other than localhost unless `--allow-remote` is passed.
 
 **Backfill: `make backfill HOURS=24`.** Writes past rows straight to the configured database so charts have history at once, at `--per-minute` rows per minute (default 20, so 28,800 rows for a day). The rows use the same mix and the same simulation profiles as live traffic, and invalid orders take 1–5 ms because the real app rejects them before simulating anything. **These rows are invented, not measured**, and skip the recording pipeline. It refuses to run when `ENVIRONMENT=production`, and refuses if the range already holds rows, so running it twice cannot double the data. At most 24 hours, the longest `/metrics` window.
+
+With `--degrade NAME` (and `--degrade-minutes`, default 30, 1–1440), the backfill degrades one endpoint for its most recent minutes; see [Degraded demo mode](#degraded-demo-mode).
 
 Both modes accept `--seed` for repeatable runs.
 

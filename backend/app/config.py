@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     metrics_window_minutes: int = Field(default=60, ge=1, le=1440)
     simulation_latency_scale: float = Field(default=1.0, ge=0, le=100)
     simulation_failure_scale: float = Field(default=1.0, ge=0, le=100)
+    # Demo only: makes one endpoint slow and flaky so the dashboard has a problem to show.
+    # The names are the keys of DEFAULT_PROFILES; a test keeps the two lists in step.
+    simulation_degraded_endpoint: (
+        Literal["users", "products", "orders", "search", "reports", "orders_create"] | None
+    ) = None
     ai_provider: Literal["disabled", "gemini", "groq"] = "disabled"
     ai_api_key: SecretStr = SecretStr("")
     ai_model: str = ""
