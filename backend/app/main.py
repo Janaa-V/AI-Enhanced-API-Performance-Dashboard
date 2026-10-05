@@ -4,17 +4,20 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx2
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import Scope
 
 from app.api.errors import register_error_handlers
+from app.api.routers.analysis import router as analysis_router
 from app.api.routers.demo import router as demo_router
 from app.api.routers.health import router as health_router
 from app.api.routers.metrics import router as metrics_router
 from app.config import Settings, get_settings
 from app.database import Database
 from app.middleware.request_logging import RequestLoggingMiddleware
+from app.services.analysis.guard import build_analyzer
 from app.services.request_recorder import RequestRecorder
 from app.services.simulation import DEFAULT_PROFILES, DEMO_DEGRADATION, Simulator
 
@@ -53,11 +56,15 @@ def create_app() -> FastAPI:
         application.state.database = database
         application.state.recorder = RequestRecorder(database.sessions)
         application.state.simulator = build_simulator(settings)
+        # One client for every provider call, so connections to the provider are reused.
+        http_client = httpx2.AsyncClient(timeout=settings.ai_timeout_seconds)
+        application.state.analyzer = build_analyzer(settings, http_client)
         try:
             await database.check_connection()
             yield
         finally:
             application.state.recorder = None
+            await http_client.aclose()
             await database.close()
 
     application = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -73,6 +80,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(demo_router)
     application.include_router(metrics_router)
+    application.include_router(analysis_router)
     return application
 
 

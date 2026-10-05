@@ -45,6 +45,10 @@ class Settings(BaseSettings):
         max_length=100,
     )
     ai_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    # The same window within this many seconds reuses the last answer; 0 turns caching off.
+    ai_cache_seconds: int = Field(default=60, ge=0, le=3600)
+    # Real provider calls allowed in any rolling hour, across all clients.
+    ai_quota_per_hour: int = Field(default=30, ge=1, le=1000)
 
     @model_validator(mode="after")
     def ai_settings_are_usable(self) -> Self:

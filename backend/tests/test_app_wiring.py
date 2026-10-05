@@ -4,6 +4,7 @@ import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import httpx2
 import pytest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
@@ -87,3 +88,25 @@ def test_the_configured_endpoint_is_degraded_and_a_warning_says_so(
 def test_the_scales_from_settings_still_apply() -> None:
     delays = report_delays(Settings(_env_file=None, simulation_latency_scale=0))
     assert set(delays) == {0}
+
+
+# --- the analyzer and its HTTP client ------------------------------------------------
+
+
+def test_the_analyzer_gets_one_client_that_is_closed_at_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients: list[httpx2.AsyncClient] = []
+
+    def fake_build(settings: Settings, client: httpx2.AsyncClient) -> object:
+        clients.append(client)
+        return object()
+
+    monkeypatch.setattr("app.main.Database", lambda settings: AsyncMock())
+    monkeypatch.setattr("app.main.build_analyzer", fake_build)
+    application = create_app()
+    with TestClient(application):
+        [client] = clients
+        assert application.state.analyzer is not None
+        assert not client.is_closed
+    assert client.is_closed
