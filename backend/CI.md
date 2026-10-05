@@ -13,7 +13,7 @@ The GitHub Actions workflow is [Backend CI](../.github/workflows/backend-ci.yml)
 | Repository secret scan | Gitleaks scans fetched Git history with findings redacted |
 | Backend CI passed | Succeeds only when all preceding jobs succeed |
 
-Unit tests run without a database or credentials. Integration tests are separate (`pytest -m integration`) and use a throwaway PostgreSQL service container with trust authentication, so CI holds no database secret. No AI credentials or deployment secrets are used.
+Unit tests run without a database or credentials. Integration tests are separate (`pytest -m integration`) and use a throwaway PostgreSQL service container with trust authentication, so CI holds no database secret. No AI credentials or deployment secrets are used: AI providers are tested against mocked HTTP, and the one test that calls a real provider (`pytest -m live`, `make test-live`) is excluded by default and never run in CI.
 
 Jobs install dependencies using `uv sync --locked`. CI pins uv and external action revisions, caches dependencies using the lockfile, uses read-only repository permissions, disables persisted checkout credentials, sets timeouts, and cancels superseded runs. Gitleaks is pinned and its release archive is checked against the published release checksum. Fork pull requests execute without privileged deployment credentials.
 

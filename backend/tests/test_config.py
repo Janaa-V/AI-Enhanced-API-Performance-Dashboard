@@ -58,3 +58,36 @@ def test_the_degraded_endpoint_choices_match_the_profiles() -> None:
     annotation = Settings.model_fields["simulation_degraded_endpoint"].annotation
     literal = next(arg for arg in get_args(annotation) if arg is not type(None))
     assert set(get_args(literal)) == set(DEFAULT_PROFILES)
+
+
+def test_ai_is_disabled_by_default() -> None:
+    assert Settings(_env_file=None).ai_provider == "disabled"
+
+
+@pytest.mark.parametrize("provider", ["groq", "gemini"])
+def test_a_real_provider_needs_a_key(provider: str) -> None:
+    with pytest.raises(ValidationError, match="AI_API_KEY"):
+        Settings(_env_file=None, ai_provider=provider)  # type: ignore[arg-type]
+    assert Settings(_env_file=None, ai_provider=provider, ai_api_key="k").ai_provider == provider  # type: ignore[arg-type]
+
+
+def test_the_fake_provider_is_refused_in_production() -> None:
+    assert Settings(_env_file=None, ai_provider="fake").ai_provider == "fake"
+    with pytest.raises(ValidationError, match="not allowed in production"):
+        Settings(_env_file=None, ai_provider="fake", environment="production")
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["../secrets", "a/../b", ".hidden", "a/b/c", "gemini flash", "a?key=x", "x" * 101],
+)
+def test_unsafe_model_names_are_rejected(model: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ai_model=model)
+
+
+@pytest.mark.parametrize(
+    "model", ["", "openai/gpt-oss-120b", "gemini-3.5-flash-lite", "llama-3.3-70b-versatile"]
+)
+def test_real_model_names_are_accepted(model: str) -> None:
+    assert Settings(_env_file=None, ai_model=model).ai_model == model
