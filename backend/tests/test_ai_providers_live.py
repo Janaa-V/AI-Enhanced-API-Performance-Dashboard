@@ -4,7 +4,6 @@ It proves what mocks cannot: that the real API still accepts our request and sch
 returns an answer that meets the contract. It costs one request of the free quota.
 """
 
-import json
 from datetime import UTC, datetime
 
 import httpx2
@@ -13,6 +12,7 @@ import pytest
 from app.config import Settings
 from app.schemas.metrics import EndpointMetrics, StatusCodeCount, Summary
 from app.services.analysis.input import build_analysis_input
+from app.services.analysis.prompt import SYSTEM_PROMPT, user_message
 from app.services.analysis.providers import build_provider
 from app.services.metrics import TimeWindow
 
@@ -48,7 +48,7 @@ def sample_input() -> str:
             StatusCodeCount(status_code=504, count=20),
         ],
     )
-    return json.dumps(built.model_dump(mode="json"))
+    return user_message(built)
 
 
 async def test_the_configured_provider_returns_a_valid_analysis() -> None:
@@ -59,10 +59,7 @@ async def test_the_configured_provider_returns_a_valid_analysis() -> None:
         provider = build_provider(settings, client)
         assert provider is not None
         answer = await provider.complete(
-            system=(
-                "You review API performance metrics. Use only the numbers given. Reply in the "
-                "required JSON format."
-            ),
+            system=SYSTEM_PROMPT,
             user=sample_input(),
         )
     # The contract was already enforced while parsing; check it is about this data.
