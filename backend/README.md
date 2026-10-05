@@ -10,7 +10,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Done |
 | 4. Demonstration workflow | Bounded traffic generator (live and synthetic backfill), `make traffic` | Done |
-| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | In progress: degraded mode, contract and input done |
+| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | In progress: degraded mode, contract, input and providers done |
 | 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
 Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; `/health`, the demo routes and `/metrics` exist today.
@@ -36,6 +36,7 @@ curl 'http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1'
 | `make check` | Lint, format check, type check and tests |
 | `make test` | Unit tests; they mock the database and need no PostgreSQL |
 | `make test-integration` | Tests against a real PostgreSQL test database |
+| `make test-live` | One real call to the configured AI provider; needs a key in `.env`, skipped otherwise, never run in CI |
 | `make migrate` | Apply database migrations |
 | `make migration MSG="..."` | Generate a migration from model changes; always review it |
 | `make traffic` | Send live demo traffic to the running backend (`ARGS="--duration 300 --concurrency 10"`) |
@@ -96,8 +97,9 @@ Settings are validated at startup by `app/config.py` (Pydantic). Values come fro
 | `SIMULATION_LATENCY_SCALE` | `1` | Multiplier for simulated delays; `0` removes them |
 | `SIMULATION_FAILURE_SCALE` | `1` | Multiplier for simulated failure rates; `0` turns failures off |
 | `SIMULATION_DEGRADED_ENDPOINT` | unset | Demo only: one profile name (for example `reports`) to make slow and flaky; see [Degraded demo mode](#degraded-demo-mode) |
-| `AI_PROVIDER` | `disabled` | `disabled`, `gemini` or `groq` |
-| `AI_API_KEY`, `AI_MODEL` | empty | Provider credentials and model, backend-only |
+| `AI_PROVIDER` | `disabled` | `disabled`, `fake` (a fixed, labelled answer with no key, for local demos; refused in production), `gemini` or `groq` |
+| `AI_API_KEY` | empty | Provider key, backend-only; required for `gemini` and `groq`, checked at startup |
+| `AI_MODEL` | empty | Empty uses the provider's default (`openai/gpt-oss-120b` on Groq, `gemini-3.5-flash-lite` on Gemini); letters, digits, `._-` and at most one `/` |
 | `AI_TIMEOUT_SECONDS` | `30` | Provider timeout, above 0 and at most 120 |
 | `ENVIRONMENT`, `APP_NAME` | `development`, `API Performance Dashboard` | Runtime label and API title |
 
@@ -193,6 +195,14 @@ Accepts an optional `window_minutes`. The server computes the metrics itself; cl
 
 Checked on a degraded backfill (`--degrade reports --degrade-minutes 30`): the input showed reports' p95 rising from 1441 to 4155 ms and its error rate from 5.5% to 24.6% between the halves, with every other endpoint flat.
 
+**Providers (built).** `app/services/analysis/providers.py` puts Groq and Gemini behind one small interface, `complete(system, user) -> Analysis`, over plain HTTPS with `httpx2` (no vendor SDKs):
+
+- **Groq** uses its OpenAI-compatible chat API with `response_format` set to the `Analysis` JSON schema in strict mode, so decoding is constrained to that shape; reasoning models (`openai/gpt-oss-*`) are asked for low reasoning effort. **Gemini** uses `models/{model}:generateContent` with `responseJsonSchema`. Both use temperature 0.2 and at most 1,500 output tokens, and every answer is validated against the contract again.
+- **One error type**, `ProviderError`, with a kind: `timeout`, `unavailable` (network or 5xx), `rate_limited` (429, keeping a valid `Retry-After`), `auth` (401/403), `bad_request` (other 4xx) or `bad_output` (not JSON, breaks the contract, cut off or blocked). It carries only the kind and the status, never a response body or headers, which could echo the key; tests send hostile replies that do exactly that and check the key appears in no error, traceback, log line or repr.
+- **The key travels in a header, never the URL** (Gemini also accepts `?key=`, but URLs end up in logs). `AI_MODEL` is restricted to plain names because it becomes part of Gemini's URL path.
+- **No retries:** the free-tier quota is scarce, and `/analyze` will already allow one call per window at a time.
+- **`AI_PROVIDER=fake`** answers without a network call or key, naming the slowest endpoint from the input, so the dashboard panel can be built and demoed offline. Settings refuse it in production, and refuse `groq` or `gemini` without `AI_API_KEY`, so a bad configuration fails at startup.
+
 ## Simulation and recording
 
 - Only `/demo/*` requests are recorded; `/health`, `/metrics`, `/analyze` and docs are excluded.
@@ -271,7 +281,7 @@ Both modes accept `--seed` for repeatable runs.
 | --- | --- |
 | Connection lifecycle, `/health` | Unit tests with a mocked database; no PostgreSQL, credentials or network needed. These run in CI. |
 | Schema, migrations, request logging, metrics queries | Integration tests (`make test-integration`) against a separate PostgreSQL test database |
-| AI provider | Mocked responses covering timeouts, rate limits, malformed output and missing configuration *(planned)* |
+| AI providers | `httpx2.MockTransport` answers every success and failure path for both adapters, including hostile replies that echo the key; `make test-live` makes one real call when a key is configured |
 
 Queries need a real PostgreSQL because time binning, `TIMESTAMPTZ` and boundary behaviour are database behaviour that a mock cannot verify.
 
@@ -311,7 +321,7 @@ backend/
 └── CI.md                          Automated checks
 ```
 
-AI analysis: `schemas/analysis.py` (contract) and `services/analysis/input.py` (model input) exist; planned additions are `services/analysis/` providers, prompt and service, and `api/routers/analysis.py`.
+AI analysis: `schemas/analysis.py` (contract), `services/analysis/input.py` (model input) and `services/analysis/providers.py` (Groq, Gemini and fake adapters) exist; planned additions are the prompt and service in `services/analysis/` and `api/routers/analysis.py`.
 
 ## Deployment assumptions
 

@@ -6,7 +6,7 @@ UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && ec
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration migrate migration traffic backfill openapi openapi-check clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration test-live migrate migration traffic backfill openapi openapi-check clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
@@ -25,6 +25,7 @@ help:
 	  '  make audit               Audit dependencies for CVEs with pip-audit' \
 	  '  make test                Run unit tests (no database needed)' \
 	  '  make test-integration    Run tests against the PostgreSQL test database' \
+	  '  make test-live           Call the configured AI provider once (needs a key; never in CI)' \
 	  '  make migrate             Apply database migrations (alembic upgrade head)' \
 	  '  make migration MSG=text  Generate a migration from model changes; review it' \
   '  make traffic             Send live demo traffic to the running backend' \
@@ -98,6 +99,9 @@ test: check-uv
 
 test-integration: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run pytest -m integration
+
+test-live: check-uv
+	cd "$(BACKEND_DIR)" && "$(UV)" run pytest -m live -rs
 
 traffic: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.generate_traffic --base-url "http://$(HOST):$(PORT)" $(ARGS)
