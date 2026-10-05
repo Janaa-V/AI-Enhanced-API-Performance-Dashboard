@@ -10,7 +10,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Done |
 | 4. Demonstration workflow | Bounded traffic generator (live and synthetic backfill), `make traffic` | Done |
-| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | In progress: degraded mode, contract, input, providers, prompt and service done |
+| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | Done in the backend: degraded mode, contract, input, providers, prompt, service and `POST /analyze`; the dashboard panel is next |
 | 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
 Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; `/health`, the demo routes and `/metrics` exist today.
@@ -101,6 +101,8 @@ Settings are validated at startup by `app/config.py` (Pydantic). Values come fro
 | `AI_API_KEY` | empty | Provider key, backend-only; required for `gemini` and `groq`, checked at startup |
 | `AI_MODEL` | empty | Empty uses the provider's default (`openai/gpt-oss-120b` on Groq, `gemini-3.5-flash-lite` on Gemini); letters, digits, `._-` and at most one `/` |
 | `AI_TIMEOUT_SECONDS` | `30` | Provider timeout, above 0 and at most 120 |
+| `AI_CACHE_SECONDS` | `60` | The same window within this time reuses the last answer; `0` turns caching off; at most 3600 |
+| `AI_QUOTA_PER_HOUR` | `30` | Real provider calls allowed in any rolling hour, across all clients; 1–1000 |
 | `ENVIRONMENT`, `APP_NAME` | `development`, `API Performance Dashboard` | Runtime label and API title |
 
 **Secrets:** `.env` is git-ignored and only `.env.example` is tracked. AI keys stay in the backend; frontend `VITE_*` variables are public. Secrets are `SecretStr` values and must never be logged. In CI and deployment, inject secrets through the platform's secret store. If a key leaks, revoke it: deleting it from Git does not invalidate it.
@@ -179,9 +181,32 @@ The trend groups rows with PostgreSQL's `date_bin`, which returns only buckets t
 
 ### `POST /analyze`
 
-Accepts an optional `window_minutes`. The server computes the metrics itself; clients cannot supply prompts or measurements. Returns the window, provider, generation time and analysis text. An empty window returns `no_data` without calling the provider. Missing configuration, timeouts, rate limits and malformed provider output return documented errors that expose no credentials or upstream details. Calls have a timeout, bounded input and output, a short cache and one in-flight request per window.
+Accepts an optional body `{"window_minutes": 60}` (default `METRICS_WINDOW_MINUTES`). The server computes the metrics itself; clients cannot supply prompts or measurements, and unknown fields are rejected with `422`. Only `POST` is accepted: every call can spend provider quota, so it must not be cached or retried by browsers and proxies as a `GET` could be.
 
-**Contract (built; the route is not yet).** `app/schemas/analysis.py`:
+```bash
+curl -X POST http://127.0.0.1:8000/analyze -H 'Content-Type: application/json' -d '{"window_minutes": 60}'
+```
+
+| Status | `error.code` | When |
+| --- | --- | --- |
+| `200` | | An answer (`status: "ok"`), or `status: "no_data"` with fewer than 20 requests in the window |
+| `422` | | Window outside 1–1440, or an unknown field such as `prompt` |
+| `429` | `rate_limited` | The server's quota (`AI_QUOTA_PER_HOUR`) or the provider's own rate limit; `Retry-After` gives whole seconds, rounded up, when known |
+| `502` | `ai_unavailable` | The provider timed out, failed, or gave an answer that broke the contract or named an unknown endpoint. A rejected key or model is also logged as an error asking to check `AI_API_KEY` and `AI_MODEL` |
+| `503` | `ai_disabled` | `AI_PROVIDER=disabled` |
+| `503` | `service_unavailable` | The database is unavailable |
+
+**Protection (`app/services/analysis/guard.py`).** Free-tier quota is the scarce resource:
+
+- **Cache:** the same window within `AI_CACHE_SECONDS` (default 60) returns the stored answer with `cached: true` and its original `generated_at`. `no_data` answers are cached too; errors never are.
+- **Single-flight:** callers asking for the same window at once wait on a per-window lock, and all but the first find the fresh answer when they get it. Different windows never wait for each other. Waiting callers hold no database connection, because the session only starts a transaction when the analysis runs its first query.
+- **Quota:** `QuotaProvider` wraps the real provider and allows `AI_QUOTA_PER_HOUR` (default 30) calls in any rolling hour across all clients. Only real provider calls count, including ones that then fail, so cached and `no_data` answers cost nothing; when it is spent, the `429` says when the oldest call leaves the hour.
+- All of this is in-process, which suits the single backend instance; with several instances the cache, locks and quota would move to a shared store such as Redis.
+- The provider client is one `httpx2.AsyncClient`, created at startup and closed at shutdown, so connections to the provider are reused.
+
+Checked on the real server with Groq and a degraded backfill: the first call answered in 2.9 s and named `GET /demo/reports` with its error rate rising from 0.082 to 0.194 between the halves; the same call again came from the cache in 2 ms; a body with a `prompt` field got `422`.
+
+**Contract.** `app/schemas/analysis.py`:
 
 - Request: `{"window_minutes": 60}`, optional (defaults to `METRICS_WINDOW_MINUTES`), 1–1440. Unknown fields are rejected, so a client cannot slip in a prompt.
 - Response: one shape for both outcomes. `status` is `ok` or `no_data`; `window`, `generated_at` and `cached` are always present; `provider`, `model` and `analysis` are present for `ok` and null for `no_data`. A validator enforces that pairing.
@@ -323,7 +348,7 @@ backend/
 │   └── api/
 │       ├── dependencies.py        Shared dependencies (simulator, clock, session, settings)
 │       ├── errors.py              One JSON error format and its handler
-│       └── routers/               health.py, demo.py, metrics.py
+│       └── routers/               health.py, demo.py, metrics.py, analysis.py
 ├── migrations/                    Alembic revisions (schema history)
 ├── scripts/generate_traffic.py    Live demo traffic and synthetic backfill
 ├── tests/
@@ -332,7 +357,7 @@ backend/
 └── CI.md                          Automated checks
 ```
 
-AI analysis: `schemas/analysis.py` (contract) and `services/analysis/` with `input.py` (model input), `providers.py` (Groq, Gemini and fake adapters), `prompt.py` and `service.py` exist; `api/routers/analysis.py` is next.
+AI analysis: `api/routers/analysis.py` (`POST /analyze`), `schemas/analysis.py` (contract) and `services/analysis/` with `input.py` (model input), `providers.py` (Groq, Gemini and fake adapters), `prompt.py`, `service.py` and `guard.py` (cache, single-flight and quota).
 
 ## Deployment assumptions
 

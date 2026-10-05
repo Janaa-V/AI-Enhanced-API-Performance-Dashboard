@@ -124,10 +124,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Analyze
+         * @description Summarise the window's metrics with the configured AI provider.
+         *
+         *     The server builds the input itself from aggregates; clients send only the window.
+         */
+        post: operations["post_analyze_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Analysis */
+        Analysis: {
+            /** Headline */
+            headline: string;
+            /** Observations */
+            observations: components["schemas"]["Observation"][];
+            /** Hypotheses */
+            hypotheses: components["schemas"]["Hypothesis"][];
+            /** Next Steps */
+            next_steps: string[];
+        };
+        /** AnalysisRequest */
+        AnalysisRequest: {
+            /** Window Minutes */
+            window_minutes?: number | null;
+        };
+        /**
+         * AnalysisResponse
+         * @description One shape for both outcomes, so clients handle a single type.
+         *
+         *     With too little traffic the status is "no_data" and provider, model and analysis are
+         *     null; no provider was called.
+         */
+        AnalysisResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "no_data";
+            window: components["schemas"]["AnalysisWindow"];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Provider */
+            provider: string | null;
+            /** Model */
+            model: string | null;
+            /** Cached */
+            cached: boolean;
+            analysis: components["schemas"]["Analysis"] | null;
+        };
+        /** AnalysisWindow */
+        AnalysisWindow: {
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Window Minutes */
+            window_minutes: number;
+        };
         /** CreateOrderRequest */
         CreateOrderRequest: {
             /** User Id */
@@ -192,6 +272,16 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** Hypothesis */
+        Hypothesis: {
+            /** Text */
+            text: string;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "low" | "medium";
+        };
         /** LatencyTrend */
         LatencyTrend: {
             /** Overall */
@@ -227,6 +317,18 @@ export interface components {
             window_minutes: number;
             /** Bucket Minutes */
             bucket_minutes: number;
+        };
+        /** Observation */
+        Observation: {
+            /** Endpoint */
+            endpoint: string | null;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "total_requests" | "requests_per_minute" | "error_rate" | "client_errors" | "avg_latency_ms" | "p95_latency_ms";
+            /** Text */
+            text: string;
         };
         /** Order */
         Order: {
@@ -689,6 +791,66 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_analyze_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalysisRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many analyses right now; try again later. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The AI provider could not produce an analysis; try again. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description AI analysis is not configured on this server. Also returned when the database is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

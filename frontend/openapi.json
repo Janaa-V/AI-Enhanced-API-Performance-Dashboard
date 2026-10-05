@@ -393,10 +393,249 @@
           }
         }
       }
+    },
+    "/analyze": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Post Analyze",
+        "description": "Summarise the window's metrics with the configured AI provider.\n\nThe server builds the input itself from aggregates; clients send only the window.",
+        "operationId": "post_analyze_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AnalysisRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many analyses right now; try again later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The AI provider could not produce an analysis; try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI analysis is not configured on this server. Also returned when the database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Analysis": {
+        "properties": {
+          "headline": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Headline"
+          },
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/Observation"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Observations"
+          },
+          "hypotheses": {
+            "items": {
+              "$ref": "#/components/schemas/Hypothesis"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Hypotheses"
+          },
+          "next_steps": {
+            "items": {
+              "type": "string",
+              "maxLength": 200,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Next Steps"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "headline",
+          "observations",
+          "hypotheses",
+          "next_steps"
+        ],
+        "title": "Analysis"
+      },
+      "AnalysisRequest": {
+        "properties": {
+          "window_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Minutes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AnalysisRequest"
+      },
+      "AnalysisResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "no_data"
+            ],
+            "title": "Status"
+          },
+          "window": {
+            "$ref": "#/components/schemas/AnalysisWindow"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached"
+          },
+          "analysis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Analysis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "window",
+          "generated_at",
+          "provider",
+          "model",
+          "cached",
+          "analysis"
+        ],
+        "title": "AnalysisResponse",
+        "description": "One shape for both outcomes, so clients handle a single type.\n\nWith too little traffic the status is \"no_data\" and provider, model and analysis are\nnull; no provider was called."
+      },
+      "AnalysisWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Window Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "window_minutes"
+        ],
+        "title": "AnalysisWindow"
+      },
       "CreateOrderRequest": {
         "properties": {
           "user_id": {
@@ -603,6 +842,31 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "Hypothesis": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium"
+            ],
+            "title": "Confidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "confidence"
+        ],
+        "title": "Hypothesis"
+      },
       "LatencyTrend": {
         "properties": {
           "overall": {
@@ -704,6 +968,49 @@
           "bucket_minutes"
         ],
         "title": "MetricsWindow"
+      },
+      "Observation": {
+        "properties": {
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "total_requests",
+              "requests_per_minute",
+              "error_rate",
+              "client_errors",
+              "avg_latency_ms",
+              "p95_latency_ms"
+            ],
+            "title": "Metric"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "endpoint",
+          "metric",
+          "text"
+        ],
+        "title": "Observation"
       },
       "Order": {
         "properties": {
