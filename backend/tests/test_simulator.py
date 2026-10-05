@@ -97,6 +97,58 @@ def test_negative_scales_are_rejected() -> None:
         Simulator(failure_scale=-0.5)
 
 
+# --- degraded: one endpoint made slow and flaky on purpose --------------------
+
+
+def test_the_degraded_endpoint_is_three_times_slower() -> None:
+    simulator = Simulator(degraded=REPORTS, rng=ScriptedRandom(latency_fraction=1.0))
+    assert simulator.plan(REPORTS).delay_seconds == pytest.approx(4.5)  # 1500 ms * 3
+
+
+def test_the_degraded_endpoint_fails_a_quarter_of_the_time() -> None:
+    simulator = Simulator(degraded=REPORTS, rng=ScriptedRandom(roll=0.2))
+    assert simulator.plan(REPORTS).failure_status == 504  # 0.2 < 0.25, though above 0.08
+
+
+def test_observed_failure_rate_of_the_degraded_endpoint() -> None:
+    simulator = Simulator(degraded=REPORTS, rng=random.Random(42))
+    runs = 5000
+    failures = sum(simulator.plan(REPORTS).failure_status is not None for _ in range(runs))
+    assert 0.22 <= failures / runs <= 0.28
+
+
+def test_other_endpoints_keep_their_normal_behaviour() -> None:
+    simulator = Simulator(degraded=REPORTS, rng=ScriptedRandom(latency_fraction=1.0, roll=0.2))
+    outcome = simulator.plan(USERS)
+    assert outcome.delay_seconds == pytest.approx(0.08)
+    assert outcome.failure_status is None
+
+
+def test_only_the_same_profile_object_is_degraded_not_an_equal_copy() -> None:
+    copy = EndpointProfile(
+        REPORTS.min_latency_ms,
+        REPORTS.max_latency_ms,
+        REPORTS.failure_rate,
+        REPORTS.failure_statuses,
+    )
+    simulator = Simulator(degraded=REPORTS, rng=ScriptedRandom(latency_fraction=1.0))
+    assert copy == REPORTS
+    assert simulator.plan(copy).delay_seconds == pytest.approx(1.5)
+
+
+def test_the_scales_still_apply_on_top_of_a_degradation() -> None:
+    simulator = Simulator(
+        degraded=REPORTS, latency_scale=2, rng=ScriptedRandom(latency_fraction=1.0)
+    )
+    assert simulator.plan(REPORTS).delay_seconds == pytest.approx(9.0)
+
+
+def test_nothing_is_degraded_by_default() -> None:
+    outcome = Simulator(rng=ScriptedRandom(latency_fraction=1.0, roll=0.2)).plan(REPORTS)
+    assert outcome.delay_seconds == pytest.approx(1.5)
+    assert outcome.failure_status is None
+
+
 # --- simulate: the side effects ----------------------------------------------
 
 

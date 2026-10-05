@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.services.simulation.profiles import EndpointProfile
+from app.services.simulation.profiles import EndpointProfile, degrade
 
 Sleep = Callable[[float], Awaitable[None]]
 
@@ -48,6 +48,7 @@ class Simulator:
         *,
         latency_scale: float = 1.0,
         failure_scale: float = 1.0,
+        degraded: EndpointProfile | None = None,
         rng: RandomSource | None = None,
         sleep: Sleep | None = None,
     ) -> None:
@@ -55,6 +56,9 @@ class Simulator:
             raise ValueError("Simulation scales must not be negative.")
         self._latency_scale = latency_scale
         self._failure_scale = failure_scale
+        # Matched by identity: only the exact profile object the routes pass is degraded,
+        # never another profile that happens to have the same numbers.
+        self._degraded = (degraded, degrade(degraded)) if degraded is not None else None
         # Simulation needs statistical variety, not cryptographic randomness.
         self._rng: RandomSource = rng if rng is not None else random.Random()  # noqa: S311
         self._sleep: Sleep = sleep if sleep is not None else asyncio.sleep
@@ -65,6 +69,8 @@ class Simulator:
         With no await between the random draws, concurrent requests sharing this
         simulator can never interleave them.
         """
+        if self._degraded is not None and profile is self._degraded[0]:
+            profile = self._degraded[1]
         latency_ms = self._rng.uniform(profile.min_latency_ms, profile.max_latency_ms)
         # A probability above 1 (from a large scale) simply means "always fails".
         fails = self._rng.random() < profile.failure_rate * self._failure_scale
