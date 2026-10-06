@@ -7,6 +7,7 @@ import {
   formatRate,
   formatRelative,
   formatTime,
+  formatWait,
   NO_VALUE,
 } from './format'
 
@@ -119,5 +120,18 @@ describe('null', () => {
       expect(format(null)).toBe(NO_VALUE)
     }
     expect(formatRelative(null, Date.now())).toBe(NO_VALUE)
+  })
+})
+
+describe('formatWait', () => {
+  it.each([
+    [0, '0 s'],
+    [1, '1 s'],
+    [59, '59 s'],
+    [60, '1 min'],
+    [61, '2 min'],
+    [3600, '60 min'],
+  ])('%d seconds reads as %j', (seconds, text) => {
+    expect(formatWait(seconds)).toBe(text)
   })
 })

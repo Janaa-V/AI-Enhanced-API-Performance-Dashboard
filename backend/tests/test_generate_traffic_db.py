@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from app.config import Settings
 from app.database import Database
 from app.models import RequestLog
-from scripts.generate_traffic import BackfillRefused, backfill, run_live
+from scripts.generate_traffic import BackfillRefused, Degraded, backfill, run_live
 
 pytestmark = pytest.mark.integration
 
@@ -64,3 +64,24 @@ async def test_backfill_writes_the_range_once_and_refuses_to_double_it(
 
     with pytest.raises(BackfillRefused, match="rows already exist"):
         await backfill(db, migrated_database, hours=1, per_minute=10, end=END, rng=random.Random())
+
+
+async def test_a_degraded_backfill_stores_the_slow_rows_only_at_the_end(
+    db: Database, migrated_database: Settings
+) -> None:
+    since = END - timedelta(minutes=30)
+    await backfill(
+        db,
+        migrated_database,
+        hours=1,
+        per_minute=200,
+        end=END,
+        rng=random.Random(3),
+        degraded=Degraded("reports", since=since),
+    )
+    reports = [row for row in await all_rows(db) if row.endpoint == "/demo/reports"]
+    before = [row.latency_ms for row in reports if row.started_at < since]
+    after = [row.latency_ms for row in reports if row.started_at >= since]
+    assert before and after
+    assert max(before) <= 1500  # the normal profile
+    assert min(after) >= 1200  # three times the normal 400 ms minimum

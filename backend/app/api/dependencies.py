@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.database import get_session
+from app.services.analysis.guard import Analyzer
 from app.services.simulation import Simulator
 
 Clock = Callable[[], datetime]
@@ -19,6 +20,13 @@ def get_simulator(request: Request) -> Simulator:
 
 
 SimulatorDep = Annotated[Simulator, Depends(get_simulator)]
+
+
+def get_analyzer(request: Request) -> Analyzer:
+    return request.app.state.analyzer
+
+
+AnalyzerDep = Annotated[Analyzer, Depends(get_analyzer)]
 
 
 def get_clock() -> Clock:

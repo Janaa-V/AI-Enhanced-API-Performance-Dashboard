@@ -1,0 +1,8 @@
+[
+  {
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "reason": "Reached only through stylelint, a development tool that reads our own CSS paths; never bundled and never given untrusted patterns. No patched version exists yet (all versions up to 3.0.3 are affected).",
+    "reviewBy": "2026-11-05"
+  }
+]

@@ -2,7 +2,7 @@
 
 A React dashboard that presents the backend's API performance data and AI-assisted observations.
 
-> **Status: dashboard complete.** Steps 1 to 7 of the [build order](#build-order) are done: the typed API contract, pure formatting and chart-data functions, data hooks and controls, KPI cards, latency and status-code charts, sortable tables, and a polish pass (both themes at 360, 768 and 1280 px with no sideways page scroll, no axe-core WCAG 2.1 AA violations, and every control reachable and visibly focused by keyboard). The backend's `/metrics` contract is final (`backend/app/schemas/metrics.py`). `POST /analyze` does not exist yet, so everything for AI insights is marked *(later)*.
+> **Status: dashboard and AI insights complete.** All eight steps of the [build order](#build-order) are done: the typed API contract, pure formatting and chart-data functions, data hooks and controls, KPI cards, latency and status-code charts, sortable tables, a polish pass (both themes at 360, 768 and 1280 px with no sideways page scroll, no axe-core WCAG 2.1 AA violations, and every control reachable and visibly focused by keyboard), and the AI insights panel for `POST /analyze`. The backend's contracts are in `backend/app/schemas/`.
 
 ## What it will show
 
@@ -11,7 +11,7 @@ A React dashboard that presents the backend's API performance data and AI-assist
 - **Status-code chart:** distribution of HTTP responses, grouped by class (2xx, 4xx, 5xx).
 - **Endpoint table:** the same statistics for each method and route.
 - **Recent requests:** a sortable table.
-- **AI insights panel** *(later)*: on-demand analysis with loading, success, empty and error states, labelled as AI-assisted.
+- **AI insights panel:** on-demand analysis of the selected window, labelled as AI-assisted, with loading, answer, too-little-traffic and error states (AI turned off, rate limited with the wait, provider failed).
 - **Controls:** time-window selector, automatic refresh toggle, manual refresh and "updated N seconds ago".
 
 Every view handles loading, empty and error states, and the layout adapts from desktop to phone width.
@@ -44,7 +44,7 @@ flowchart LR
 1. `useMetrics` fetches `GET /metrics` once per refresh. **Every panel renders from that single response**, so the KPIs, charts and tables always describe the same snapshot, just as the backend computes them in one transaction. No component fetches on its own.
 2. Types are generated from the backend's OpenAPI schema, so a contract change becomes a compile error instead of a runtime bug.
 3. Raw values are formatted only at the edge (`lib/format.ts`): the API sends unrounded milliseconds, fractional rates, UTC timestamps and `null` for "nothing to measure", and the UI keeps them that way until display.
-4. *(Later)* The insights panel calls `POST /analyze` only when the user asks, then shows the result or an actionable error.
+4. The insights panel calls `POST /analyze` only when the user asks (a mutation, not a query), then shows the answer or an actionable error. It sends only the window; the server builds the model's input from its own aggregates.
 
 ## Folder structure
 
@@ -68,10 +68,11 @@ frontend/
     │   ├── client.ts                 Axios instance: base URL, timeout, error normalisation
     │   ├── errors.ts                 ApiError and toApiError()
     │   ├── metrics.ts                fetchMetrics(params, signal)
-    │   └── analysis.ts               (later) requestAnalysis(params)
+    │   └── analysis.ts               requestAnalysis(windowMinutes), with a longer timeout
     │
     ├── models/                       Types and constants, no runtime dependencies
     │   ├── metrics.ts                Named aliases of generated types (MetricsResponse, Summary, TrendBucket, ...)
+    │   ├── analysis.ts               The same for POST /analyze (AnalysisResponse, Observation, Metric, ...)
     │   └── windows.ts                Time-window presets and their bucket sizes
     │
     ├── hooks/                        The only layer that talks to TanStack Query
@@ -83,10 +84,11 @@ frontend/
     │   ├── useTheme.ts               Dark by default, or light or system; sets data-theme on <html>
     │   ├── useChartColors.ts         Resolved token colours for Recharts, re-read on theme change
     │   ├── usePrefersReducedMotion.ts  Switches chart animations off for reduced motion
-    │   └── useAnalysis.ts            (later) useMutation wrapper for POST /analyze
+    │   └── useAnalysis.ts            useMutation wrapper for POST /analyze; never retried automatically
     │
     ├── lib/                          Pure functions, unit-tested, no React
-    │   ├── format.ts                 Latency, percentages, counts, local times; null -> "—"
+    │   ├── format.ts                 Latency, percentages, counts, local times, waits; null -> "—"
+    │   ├── analysis.ts               Labels for the analysis's metrics and confidence levels
     │   ├── endpoints.ts              endpointKey(): "GET /demo/orders"
     │   ├── chartData.ts              Trend buckets -> Recharts rows; status codes -> classes
     │   ├── series.ts                 assignSeriesSlots(): each endpoint's fixed colour slot
@@ -99,7 +101,7 @@ frontend/
     │   ├── kpis/                     KpiGrid, KpiCard
     │   ├── charts/                   LatencyPanel, LatencyChart, StatusCodeChart, ChartTable
     │   ├── tables/                   EndpointTable, RecentRequestsTable, SortableHeader
-    │   └── insights/                 (later) InsightsPanel
+    │   └── insights/                 InsightsPanel, AnalysisResult
     │
     ├── styles/
     │   ├── tokens.css                Design tokens as CSS variables; light and dark themes; reduced motion
@@ -110,8 +112,8 @@ frontend/
     └── test/
         ├── setup.ts                  Testing Library matchers, MSW server lifecycle, page-state reset
         ├── render.tsx                renderWithClient and renderHookWithClient: a fresh QueryClient, retries off
-        ├── server.ts                 MSW handlers for /metrics (success, empty, 422, 503, network error)
-        └── fixtures/metrics.ts       Typed MetricsResponse fixtures: busy and empty; more are added with the panels that need them
+        ├── server.ts                 MSW handlers for /metrics (success, empty, 422, 503, network error) and /analyze (ok, no_data, 503 ai_disabled, 429, 502, network error)
+        └── fixtures/                 Typed responses: metrics.ts (busy, empty) and analysis.ts (ok, cached, no_data)
 ```
 
 ## Module responsibilities
@@ -136,13 +138,15 @@ components  ->  hooks  ->  api  ->  models
 | Module | Responsibility |
 | --- | --- |
 | `client.ts` | One Axios instance with `baseURL` from `config.ts` and a 10-second timeout. A response interceptor turns every failure into an `ApiError`, except cancellation, which TanStack Query triggers on purpose and handles itself. |
-| `errors.ts` | `ApiError` with a `kind` the UI can branch on: `network` (backend unreachable), `timeout`, `validation` (FastAPI `422`, keeps the first `msg`, such as the "too many buckets" hint), `server` (the shared `{ error: { code, message } }` body, such as `service_unavailable`) and `unknown`. Messages are safe to show; raw responses are never rendered. |
+| `errors.ts` | `ApiError` with a `kind` the UI can branch on: `network` (backend unreachable), `timeout`, `validation` (FastAPI `422`, keeps the first `msg`, such as the "too many buckets" hint), `rate_limited` (`429`, with `retryAfterSeconds` from the `Retry-After` header, in seconds or as an HTTP date), `server` (`5xx`) and `unknown`. The shared `{ error: { code, message } }` body is read for any status, and its `code` tells apart failures with the same status (`503 ai_disabled` vs `503 service_unavailable`). Messages are safe to show; raw responses are never rendered. |
 | `metrics.ts` | `fetchMetrics({ windowMinutes, bucketMinutes, recentLimit }, signal)` maps camelCase parameters to the query string and returns `MetricsResponse`. The `signal` lets TanStack Query cancel a request when the window changes. |
-| `analysis.ts` | *(later)* `requestAnalysis({ windowMinutes })`. Sends no prompt or measurements; the server computes them. |
+| `analysis.ts` | `requestAnalysis(windowMinutes)` posts `{ window_minutes }` and returns `AnalysisResponse` (`ok` or `no_data`). Sends no prompt or measurements; the server computes them. Its timeout is 45 seconds, not 10, because the backend gives the AI provider up to 30 seconds (`AI_TIMEOUT_SECONDS`). |
 
 ### `models/`
 
 `metrics.ts` re-exports readable names (`MetricsResponse`, `Summary`, `EndpointMetrics`, `StatusCodeCount`, `TrendBucket`, `EndpointTrend`, `RecentRequest`, `ErrorResponse`) from the generated schema. Nullable fields stay `number | null`.
+
+`analysis.ts` does the same for `POST /analyze` (`AnalysisRequest`, `AnalysisResponse`, `AnalysisWindow`, `Analysis`, `Observation`, `Hypothesis`). `Metric` and `Confidence` are taken from inside those schemas with indexed access types (`Observation['metric']`), so a metric added on the backend reaches the UI with the next `make api-types`, and `lib/analysis.ts` fails to compile until it has a label.
 
 `windows.ts` holds the presets the selector offers. Each respects the backend's limits (1–1440 minutes, at most 288 buckets) and targets 12–60 points per chart:
 
@@ -163,7 +167,7 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | `useMetrics(preset, { autoRefresh })` | Query key `['metrics', windowMinutes, bucketMinutes]`; the recent-requests limit is left at the backend's default (20). Polls every 15 seconds when auto-refresh is on; TanStack Query pauses polling while the tab is hidden and refetches on focus. Keeps the previous window's data on screen while a new window loads. Retries network errors and `5xx` twice; never retries `4xx`. |
 | `useDashboardControls()` | Selected preset and auto-refresh flag, read from and written to the URL query string (`?window=60&refresh=on`), so a view can be bookmarked or shared without adding a router. Unknown values fall back to the defaults. |
 | `useNow(intervalMs)` | Current time, ticking, for relative "updated" labels. Kept separate so only that label re-renders every second. |
-| `useAnalysis()` | *(later)* `useMutation` around `requestAnalysis`; only runs when the user clicks. |
+| `useAnalysis()` | `useMutation` around `requestAnalysis`: runs only when the user clicks, never on mount, focus or an interval, because each call may spend the server's AI quota. Never retried automatically (a `429` or `ai_disabled` would fail the same way); the panel offers a button instead. |
 
 `queryClient.ts` centralises defaults (`staleTime` 10 seconds, the retry rule above) so tests build the same client with retries off. It also registers `ApiError` as TanStack Query's error type, so `query.error` is typed without casts.
 
@@ -188,7 +192,7 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | `kpis/` | `KpiGrid`, `KpiCard` | Takes `Summary`: requests, requests per minute, error rate, average and p95 latency, as a `<dl>`. Error rate counts `5xx` only; the card shows `4xx` separately, matching the backend's definition. As many columns as the panel fits; values step down a size in a narrow panel (container query). |
 | `charts/` | `LatencyPanel`, `LatencyChart`, `StatusCodeChart`, `ChartTable` | `LatencyPanel` holds the p95/average switch. `LatencyChart` draws one 2 px line per endpoint plus "All endpoints" in the text colour; empty buckets are gaps, and a bucket between two empty ones gets a dot. The X axis spans the window in local time; the tooltip lists every series at the hovered bucket, highest first. `StatusCodeChart` draws one thin bar per code, coloured by class and labelled with a symbol (✓ 2xx, ! 4xx, ✕ 5xx), with the class totals as text above. Legends are HTML beside the chart. Each chart has a screen-reader summary and a collapsed `ChartTable` with every value, which the lighter light-mode series need (see the palette validation). |
 | `tables/` | `EndpointTable`, `RecentRequestsTable`, `SortableHeader` | Client-side sorting with `aria-sort` on each header; a second click flips the direction, and a new column starts in its natural direction (numbers largest first, text A to Z). `null` sorts last both ways. The endpoint table starts slowest first (p95) and shows each endpoint's latency-chart colour beside its name; recent requests start newest first, with times sorted as instants and error statuses marked ✕ 5xx or ! 4xx. Tables scroll horizontally inside their panel on narrow screens, never the page, and the scroll area is focusable for keyboard users. |
-| `insights/` | *(later)* `InsightsPanel` | Labelled "AI-assisted analysis". Shows the provider and generation time, and a clear message when AI is not configured on the server. |
+| `insights/` | `InsightsPanel`, `AnalysisResult` | Under the KPI cards. `InsightsPanel` is the only component besides `App` that calls a fetching hook; `App` gives it a `key` per window, so switching windows starts a fresh panel and an answer never sits under the wrong window. `AnalysisResult` shows the headline, then observations (tagged with endpoint and metric), possible causes (tagged "Low" or "Medium confidence", spelled out) and next steps in separate sections, and a footer: "AI-assisted analysis of 15:30–15:45 by groq (openai/gpt-oss-120b), generated at 15:45:02 (cached)", with a reminder to check it against the charts. |
 
 ### Error and empty states
 
@@ -201,6 +205,10 @@ A unit test asserts every preset stays within those limits, so a new preset cann
 | `503 service_unavailable` | The server's message ("The service is temporarily unavailable.") with "Try again" |
 | `422` | The first validation message; this means a preset is wrong, so it also logs to the console |
 | Refresh fails after data was shown | Last data stays, with `StaleDataBanner` ("Showing data from 10:42; refresh failed") |
+| Analysis: too little traffic (`no_data`) | `EmptyState` in the insights panel with the `make traffic` hint; not an error |
+| Analysis: `503 ai_disabled` | "AI analysis is turned off" and how to set `AI_PROVIDER`; no retry button, since retrying cannot help |
+| Analysis: `429 rate_limited` | The server's message and "Try again in 42 s" (or "in 59 min"), disabled until `Retry-After` has passed; the backend exposes that header through CORS so the page can read it |
+| Analysis: `502 ai_unavailable` | "The AI provider did not answer" with "Try again" |
 
 ## Styling
 
@@ -378,22 +386,33 @@ make run     # http://localhost:5173, with the backend on http://127.0.0.1:8000
 | `make sync` | Install dependencies exactly as locked (`npm ci`); `make install` may update the lockfile |
 | `make contract` | Refresh `openapi.json` from the backend, then the generated types |
 | `make format` | Format with Prettier |
-| `make audit` | Scan dependencies for known vulnerabilities |
+| `make audit` | Scan dependencies for known vulnerabilities: production strictly, then everything against the reviewed exceptions (see below) |
 | `make clean` | Remove build output and tool caches; keeps `.env`, `node_modules` and `package-lock.json` |
 
 Run `make help` for the full list. Each target runs the matching `npm run` script, which also works directly. Frontend CI calls the same targets, so they cannot drift from what CI checks. Stylelint rejects raw colours, pixel spacing, non-camelCase class names and `!important` outside `tokens.css`.
+
+### Dependency audit
+
+`make audit` (and CI) runs two steps:
+
+1. `npm audit --omit=dev` checks what ships to the browser. It allows **no exceptions**.
+2. `npm run audit:all` (`scripts/audit.mjs`) checks every dependency, development tools included, and fails on any advisory not listed in `audit-allowlist.json`.
+
+An exception is for an advisory with no fix that cannot affect the app, for example one reached only through a development tool. Each entry needs the advisory's GHSA id, the package, the reason and a `reviewBy` date at most 90 days ahead; once that date passes the audit fails until someone re-checks it. Entries no longer reported are printed as warnings so the list stays short. This follows the rule in `backend/CI.md`: specific identifier, rationale and review date, never a global suppression.
+
+Current exception: `braces` (GHSA-vfj7-8cjw-p6xm), reached only through Stylelint linting our own CSS, with no patched version yet.
 
 ## Testing
 
 | Layer | How |
 | --- | --- |
 | `lib/`, `models/` | Plain Vitest unit tests: formatting edge cases (`null`, `0`, sub-millisecond, over one second), pivoting trends with empty buckets, preset limits |
-| `api/` | MSW returns each backend response (success, empty, `422`, `503`, network failure); assert the typed result or the `ApiError` kind |
-| `hooks/` | `renderHook` with a test `QueryClient`: query keys, polling on and off, no retry on `4xx`, previous data kept while switching windows |
+| `api/` | MSW returns each backend response (success, empty, `422`, `429` with `Retry-After`, `502`, `503`, network failure); assert the typed result or the `ApiError` kind |
+| `hooks/` | `renderHook` with a test `QueryClient`: query keys, polling on and off, no retry on `4xx`, previous data kept while switching windows; the analysis mutation never fires on its own or retries |
 | `components/` | Testing Library with the typed fixtures: each panel's four states, sorting, keyboard use of the controls |
-| `App` | One integration test per fixture: busy, empty and failing backend render the right states end to end |
+| `App` | One integration test per fixture: busy, empty and failing backend render the right states end to end; an analysis resets when the window changes |
 
-Fixtures are typed as `MetricsResponse`, so a contract change breaks them at compile time too.
+Fixtures are typed as `MetricsResponse` and `AnalysisResponse`, so a contract change breaks them at compile time too. The rate-limit countdown is tested with fake timers at the exact second it ends.
 
 Tests run in the `Asia/Kolkata` time zone (`vite.config.ts`), whatever the machine's zone. The results are the same everywhere, and the half-hour offset shows that times are converted from UTC.
 
@@ -410,4 +429,4 @@ Each step is one reviewable pull request that leaves the app working.
 | 5. KPIs and charts | `kpis/`, `charts/` | Charts match `/metrics` output for a generated traffic run |
 | 6. Tables | `tables/` | Sorting, `aria-sort` and narrow-screen scrolling work |
 | 7. Polish | Visual check of both themes at phone, tablet and desktop widths, contrast and accessibility pass, README screenshots | Usable at 360 px wide and by keyboard only, AA contrast in both themes |
-| 8. AI insights *(later)* | `api/analysis.ts`, `useAnalysis`, `insights/` | Starts once `POST /analyze` exists in the backend |
+| 8. AI insights | `api/analysis.ts`, `useAnalysis`, `insights/` | Every `POST /analyze` answer and error has its state, checked against the real backend with `AI_PROVIDER=fake` |

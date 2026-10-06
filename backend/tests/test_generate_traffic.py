@@ -16,6 +16,7 @@ from app.services.simulation import DEFAULT_PROFILES
 from scripts.generate_traffic import (
     ROUTES,
     BackfillRefused,
+    Degraded,
     Tally,
     backfill,
     build_request,
@@ -90,6 +91,9 @@ def test_a_remote_server_needs_an_explicit_flag() -> None:
         ["--concurrency", "51"],
         ["--backfill-hours", "25"],
         ["--per-minute", "601"],
+        ["--backfill-hours", "1", "--degrade-minutes", "0"],
+        ["--backfill-hours", "1", "--degrade-minutes", "1441"],
+        ["--backfill-hours", "1", "--degrade", "report"],
     ],
 )
 def test_arguments_are_bounded(argv: list[str]) -> None:
@@ -101,6 +105,47 @@ def test_defaults_are_a_short_gentle_local_run() -> None:
     args = parse_args([])
     assert (args.duration, args.concurrency, args.base_url) == (60, 5, "http://127.0.0.1:8000")
     assert args.backfill_hours is None
+    assert (args.degrade, args.degrade_minutes) == (None, 30)
+
+
+def test_degrading_is_only_for_backfill(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        parse_args(["--degrade", "reports"])
+    assert "SIMULATION_DEGRADED_ENDPOINT" in capsys.readouterr().err
+    assert parse_args(["--backfill-hours", "2", "--degrade", "reports"]).degrade == "reports"
+
+
+def test_a_degraded_backfill_gets_worse_only_after_the_given_time() -> None:
+    reports = DEFAULT_PROFILES["reports"]  # 400-1500 ms, 8% failures
+    since = END - timedelta(minutes=30)
+    rows = synthetic_logs(
+        start=END - timedelta(hours=1),
+        end=END,
+        per_minute=400,
+        rng=random.Random(9),
+        degraded=Degraded("reports", since=since),
+    )
+
+    def report_rows(*, after: bool) -> list[dict]:
+        return [
+            r
+            for r in rows
+            if r["endpoint"] == "/demo/reports" and (r["started_at"] >= since) == after
+        ]
+
+    def failure_share(selected: list[dict]) -> float:
+        return sum(r["status_code"] >= 500 for r in selected) / len(selected)
+
+    before, after = report_rows(after=False), report_rows(after=True)
+    assert max(r["latency_ms"] for r in before) <= reports.max_latency_ms
+    assert min(r["latency_ms"] for r in after) >= 3 * reports.min_latency_ms
+    assert max(r["latency_ms"] for r in after) > reports.max_latency_ms
+    assert failure_share(before) < 0.15 < failure_share(after)
+    # Every other endpoint stays inside its normal range after the switch.
+    others = [r for r in rows if r["endpoint"] != "/demo/reports" and r["started_at"] >= since]
+    assert max(r["latency_ms"] for r in others) <= max(
+        p.max_latency_ms for name, p in DEFAULT_PROFILES.items() if name != "reports"
+    )
 
 
 def test_synthetic_rows_follow_the_profiles_inside_the_range() -> None:

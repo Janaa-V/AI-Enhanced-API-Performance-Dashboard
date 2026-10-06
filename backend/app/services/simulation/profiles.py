@@ -36,3 +36,34 @@ DEFAULT_PROFILES: Mapping[str, EndpointProfile] = MappingProxyType(
         "orders_create": EndpointProfile(100, 400, 0.06, (500, 503)),
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class Degradation:
+    """How much worse an endpoint behaves when it is degraded on purpose for a demo."""
+
+    latency_factor: float
+    failure_rate: float  # probability between 0 and 1
+
+    def __post_init__(self) -> None:
+        if self.latency_factor < 1:
+            raise ValueError("A degradation must not make an endpoint faster.")
+        if not 0 <= self.failure_rate <= 1:
+            raise ValueError("Failure rate must be between 0 and 1.")
+
+
+# Slow and flaky enough to stand out on the dashboard: reports go from 0.4-1.5 s to 1.2-4.5 s.
+DEMO_DEGRADATION = Degradation(latency_factor=3, failure_rate=0.25)
+
+
+def degrade(
+    profile: EndpointProfile, degradation: Degradation = DEMO_DEGRADATION
+) -> EndpointProfile:
+    """A slower, less reliable copy of the profile; the original is never changed."""
+    return EndpointProfile(
+        profile.min_latency_ms * degradation.latency_factor,
+        profile.max_latency_ms * degradation.latency_factor,
+        # Never makes an endpoint more reliable than it already is.
+        max(profile.failure_rate, degradation.failure_rate),
+        profile.failure_statuses,
+    )

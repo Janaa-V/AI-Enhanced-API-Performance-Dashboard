@@ -7,6 +7,10 @@ not measured.
 
     uv run python -m scripts.generate_traffic --duration 300 --concurrency 10
     uv run python -m scripts.generate_traffic --backfill-hours 24
+    uv run python -m scripts.generate_traffic --backfill-hours 2 --degrade reports
+
+Live traffic follows the server's own settings; to degrade an endpoint live, start the
+server with SIMULATION_DEGRADED_ENDPOINT set instead.
 """
 
 import argparse
@@ -178,19 +182,40 @@ class BackfillRefused(Exception):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class Degraded:
+    """Rows for this profile at or after `since` use its degraded behaviour."""
+
+    profile: str  # key in DEFAULT_PROFILES
+    since: datetime
+
+
 def synthetic_logs(
-    *, start: datetime, end: datetime, per_minute: float, rng: random.Random
+    *,
+    start: datetime,
+    end: datetime,
+    per_minute: float,
+    rng: random.Random,
+    degraded: Degraded | None = None,
 ) -> list[dict[str, Any]]:
-    """Plausible past rows: the same mix and simulation profiles as live traffic."""
-    simulator = Simulator(rng=rng)
+    """Plausible past rows: the same mix and simulation profiles as live traffic.
+
+    With `degraded`, one endpoint gets worse partway through, as a real incident would.
+    """
+    healthy = Simulator(rng=rng)
+    unhealthy = (
+        Simulator(rng=rng, degraded=DEFAULT_PROFILES[degraded.profile]) if degraded else healthy
+    )
     count = round((end - start).total_seconds() / 60 * per_minute)
     rows = []
     for _ in range(count):
         route = choose_route(rng)
+        started_at = start + (end - start) * rng.random()
         if is_order(route) and rng.random() < INVALID_ORDER_SHARE:
             # The real app rejects a bad body before simulating anything, so it is fast.
             status, latency_ms = 422, rng.uniform(1, 5)
         else:
+            simulator = unhealthy if degraded and started_at >= degraded.since else healthy
             outcome = simulator.plan(DEFAULT_PROFILES[route.profile])
             status = outcome.failure_status or (201 if is_order(route) else 200)
             latency_ms = outcome.delay_seconds * 1000
@@ -200,7 +225,7 @@ def synthetic_logs(
                 "endpoint": route.endpoint,
                 "status_code": status,
                 "latency_ms": latency_ms,
-                "started_at": start + (end - start) * rng.random(),
+                "started_at": started_at,
             }
         )
     return rows
@@ -214,6 +239,7 @@ async def backfill(
     per_minute: float,
     end: datetime,
     rng: random.Random,
+    degraded: Degraded | None = None,
 ) -> int:
     """Write synthetic rows for [end - hours, end); refuses to mix with existing rows."""
     if settings.environment == "production":
@@ -230,7 +256,9 @@ async def backfill(
                 f"{existing} rows already exist in that range; running twice would double them. "
                 "Empty request_logs first or choose fewer hours."
             )
-        rows = synthetic_logs(start=start, end=end, per_minute=per_minute, rng=rng)
+        rows = synthetic_logs(
+            start=start, end=end, per_minute=per_minute, rng=rng, degraded=degraded
+        )
         for chunk_start in range(0, len(rows), 5000):
             await session.execute(insert(RequestLog), rows[chunk_start : chunk_start + 5000])
         await session.commit()
@@ -266,8 +294,25 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--per-minute", type=bounded(1, 600, float), default=20, help="backfill rows per minute"
     )
+    parser.add_argument(
+        "--degrade",
+        choices=sorted(DEFAULT_PROFILES),
+        help="make this endpoint slow and flaky near the end of the backfill",
+    )
+    parser.add_argument(
+        "--degrade-minutes",
+        type=bounded(1, 1440),
+        default=30,
+        help="how many of the most recent minutes are degraded (backfill)",
+    )
     parser.add_argument("--seed", type=int, help="repeatable randomness")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.degrade and not args.backfill_hours:
+        parser.error(
+            "--degrade only applies to --backfill-hours; for live traffic, start the server "
+            "with SIMULATION_DEGRADED_ENDPOINT set"
+        )
+    return args
 
 
 async def main(argv: Sequence[str] | None = None) -> None:
@@ -278,14 +323,21 @@ async def main(argv: Sequence[str] | None = None) -> None:
     if args.backfill_hours:
         settings = get_settings()
         database = Database(settings)
+        end = datetime.now(UTC)
+        degraded = (
+            Degraded(args.degrade, since=end - timedelta(minutes=args.degrade_minutes))
+            if args.degrade
+            else None
+        )
         try:
             written = await backfill(
                 database,
                 settings,
                 hours=args.backfill_hours,
                 per_minute=args.per_minute,
-                end=datetime.now(UTC),
+                end=end,
                 rng=rng,
+                degraded=degraded,
             )
         except BackfillRefused as refusal:
             raise SystemExit(f"Backfill refused: {refusal}") from None
@@ -295,6 +347,8 @@ async def main(argv: Sequence[str] | None = None) -> None:
             f"Wrote {written} synthetic rows covering the last {args.backfill_hours} hours "
             f"of database {settings.db_name!r}. They are invented, not measured."
         )
+        if degraded:
+            print(f"{args.degrade} is degraded for the last {args.degrade_minutes} minutes.")
         return
 
     ensure_local(args.base_url, allow_remote=args.allow_remote)

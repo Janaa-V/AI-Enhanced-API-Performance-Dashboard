@@ -5,6 +5,7 @@ import { WindowSelector } from './components/controls/WindowSelector'
 import { ErrorState } from './components/feedback/ErrorState'
 import { Panel, type PanelStatus } from './components/feedback/Panel'
 import { StaleDataBanner } from './components/feedback/StaleDataBanner'
+import { InsightsPanel } from './components/insights/InsightsPanel'
 import { KpiGrid } from './components/kpis/KpiGrid'
 import { DashboardLayout } from './components/layout/DashboardLayout'
 import { Header } from './components/layout/Header'
@@ -66,6 +67,14 @@ function App() {
         <Panel title={`Last ${preset.label}`} status={status(false)} busy={busy} loadingRows={2}>
           {data && <KpiGrid summary={data.summary} />}
         </Panel>
+      }
+      insights={
+        // Keyed by window: a new window starts a fresh panel, never showing the old answer.
+        <InsightsPanel
+          key={preset.windowMinutes}
+          windowMinutes={preset.windowMinutes}
+          windowLabel={preset.label}
+        />
       }
       charts={
         <>
