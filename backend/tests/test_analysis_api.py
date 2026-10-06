@@ -115,6 +115,15 @@ def test_rate_limits_say_when_to_retry_in_whole_seconds(
     assert response.headers["retry-after"] == header
 
 
+def test_browsers_let_the_dashboard_read_the_retry_after(client, stub: StubAnalyzer) -> None:
+    """Without this CORS header, a page on another origin sees no Retry-After at all."""
+    stub.error = ProviderError("rate_limited", status=429, retry_after=5)
+    response = client.post("/analyze", headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 429
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert response.headers["access-control-expose-headers"] == "Retry-After"
+
+
 def test_a_rate_limit_without_a_known_wait_has_no_retry_after(client, stub: StubAnalyzer) -> None:
     stub.error = ProviderError("rate_limited", status=429)
     response = client.post("/analyze")

@@ -107,3 +107,10 @@ export function formatRelative(time: string | number | null, now: number): strin
   if (minutes < 60) return `${minutes} min ago`
   return `${formatCount(Math.floor(minutes / 60))} h ago`
 }
+
+// A wait in whole seconds, for "Try again in 12 s". Minutes from one minute up, rounded up so
+// the button is never enabled before the label says: 3600 -> 60 min.
+export function formatWait(seconds: number): string {
+  if (seconds < 60) return `${Math.max(0, Math.ceil(seconds))} s`
+  return `${formatCount(Math.ceil(seconds / 60))} min`
+}
