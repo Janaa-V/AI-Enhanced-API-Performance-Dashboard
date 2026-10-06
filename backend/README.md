@@ -10,7 +10,7 @@ Python 3.12–3.14 service built with FastAPI, async SQLAlchemy and PostgreSQL. 
 | 2. Simulation and recording | Request model, migration, simulation engine, five `GET /demo/*` routes, `POST /demo/orders`, the recording service, the logging middleware, and wiring them into the app | Done |
 | 3. Dashboard metrics | Typed schemas, aggregate queries, time buckets, `GET /metrics` | Done |
 | 4. Demonstration workflow | Bounded traffic generator (live and synthetic backfill), `make traffic` | Done |
-| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | Done in the backend: degraded mode, contract, input, providers, prompt, service and `POST /analyze`; the dashboard panel is next |
+| 5. AI insights | Degraded demo mode; analysis contract and model input; provider interface with Groq and Gemini adapters; `POST /analyze` with cache, single-flight and quota | Done, including the dashboard's insights panel |
 | 6. Frontend handoff | Response examples, error contracts, deployment settings | Planned |
 
 Milestones 1–4 form the first usable backend and come before any live AI call. The API and data sections below describe the **target design**; `/health`, the demo routes and `/metrics` exist today.
