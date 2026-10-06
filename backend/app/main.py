@@ -75,6 +75,9 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
+        # Browsers hide response headers from cross-origin pages unless they are listed here;
+        # the dashboard reads Retry-After to say when a rate-limited analysis may be retried.
+        expose_headers=["Retry-After"],
     )
     register_error_handlers(application)
     application.include_router(health_router)

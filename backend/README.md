@@ -191,7 +191,7 @@ curl -X POST http://127.0.0.1:8000/analyze -H 'Content-Type: application/json' -
 | --- | --- | --- |
 | `200` | | An answer (`status: "ok"`), or `status: "no_data"` with fewer than 20 requests in the window |
 | `422` | | Window outside 1–1440, or an unknown field such as `prompt` |
-| `429` | `rate_limited` | The server's quota (`AI_QUOTA_PER_HOUR`) or the provider's own rate limit; `Retry-After` gives whole seconds, rounded up, when known |
+| `429` | `rate_limited` | The server's quota (`AI_QUOTA_PER_HOUR`) or the provider's own rate limit; `Retry-After` gives whole seconds, rounded up, when known; CORS exposes it (`expose_headers`), since browsers otherwise hide it from the dashboard's origin |
 | `502` | `ai_unavailable` | The provider timed out, failed, or gave an answer that broke the contract or named an unknown endpoint. A rejected key or model is also logged as an error asking to check `AI_API_KEY` and `AI_MODEL` |
 | `503` | `ai_disabled` | `AI_PROVIDER=disabled` |
 | `503` | `service_unavailable` | The database is unavailable |

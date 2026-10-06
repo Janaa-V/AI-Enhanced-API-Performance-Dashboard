@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import App from './App'
+import { okAnalysis } from './test/fixtures/analysis'
 import { busyMetrics } from './test/fixtures/metrics'
 import { renderWithClient } from './test/render'
 import { METRICS_URL, metricsHandlers, server } from './test/server'
@@ -74,5 +75,18 @@ describe('App', () => {
     expect(await screen.findByRole('region', { name: 'Last 6 hours' })).toBeInTheDocument()
     expect(windows).toEqual(['60', '360'])
     expect(window.location.search).toBe('?window=360')
+  })
+
+  it('analyses the selected window on request, and starts fresh when the window changes', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<App />)
+    const insights = await screen.findByRole('region', { name: 'AI insights' })
+    await user.click(within(insights).getByRole('button', { name: 'Analyse the last 1 hour' }))
+    expect(await within(insights).findByText(okAnalysis.analysis!.headline)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Window' }), '6 hours')
+    const fresh = await screen.findByRole('button', { name: 'Analyse the last 6 hours' })
+    expect(fresh).toBeInTheDocument()
+    expect(screen.queryByText(okAnalysis.analysis!.headline)).not.toBeInTheDocument()
   })
 })
