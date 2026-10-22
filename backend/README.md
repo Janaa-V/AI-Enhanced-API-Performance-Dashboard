@@ -83,6 +83,31 @@ Create an untracked `.env` next to it with a strong `POSTGRES_PASSWORD`, then ru
 - The password applies when the volume is first created; editing the files later does not change an existing role's password.
 - The bootstrap role is a superuser, which is acceptable locally. Use a restricted role in production.
 
+## Running in containers
+
+The backend also runs as a container image (`backend/Dockerfile`). `compose.yaml` at the repository root starts it with its own PostgreSQL, so Docker is the only requirement:
+
+```bash
+make docker-up      # from backend/: build, start PostgreSQL, migrate, start the backend
+make traffic        # optional, needs uv; or curl http://127.0.0.1:8000/demo/users
+make docker-down    # stop; `make docker-down ARGS=--volumes` also deletes the data
+```
+
+The API is on `http://127.0.0.1:8000` (`BACKEND_PORT=8001 make docker-up` to move it). The Compose database has no published port, so it never clashes with the PostgreSQL above. If `backend/.env` exists, its AI and simulation settings are used; the database settings always come from `compose.yaml`.
+
+How the image is built and why:
+
+- **Two stages.** The first installs the locked runtime dependencies with uv (`uv sync --locked --no-dev`); the second gets only the virtual environment and the code. No uv, compilers, tests or dev tools ship. About 275 MB, of which 180 MB is the Python base image.
+- **Pinned bases.** `python:3.14-slim` and uv are pinned by digest, like the CI actions, so builds are repeatable. Bump the digests on purpose for security patches.
+- **Non-root.** The server runs as user `app` (uid 10001); the code is owned by root, so the process cannot change it.
+- **Nothing secret inside.** `.dockerignore` is an allow-list, so `.env` and anything not listed never reach the build. Settings come from environment variables only.
+- **Migrations are a separate step.** `compose.yaml` runs `alembic upgrade head` in a one-off `migrate` container and starts the backend only after it succeeds. A host does the same with a release command. Migrating at startup would race when two instances start together.
+- **One worker.** The AI cache, single-flight and hourly quota live in process memory; more workers would each get their own quota. `PORT` is honoured for hosts that set it.
+- **Clean shutdown.** uvicorn is PID 1, so `docker stop` reaches it and the lifespan closes the database pool (about 0.7 s locally).
+- **Health check.** The image's `HEALTHCHECK` calls `/health`, which also checks the database.
+
+`make docker-smoke` builds and starts a throwaway copy of the stack, checks `/health`, the user and that one demo request is recorded, then removes it. CI runs the same script.
+
 ## Configuration
 
 Settings are validated at startup by `app/config.py` (Pydantic). Values come from the process environment, which overrides `backend/.env`. Restart after changing them. Copy `.env.example` to `.env` (`make env` does this without overwriting).
@@ -351,6 +376,8 @@ backend/
 │       └── routers/               health.py, demo.py, metrics.py, analysis.py
 ├── migrations/                    Alembic revisions (schema history)
 ├── scripts/generate_traffic.py    Live demo traffic and synthetic backfill
+├── scripts/container_smoke.sh     Container smoke test (local and CI)
+├── Dockerfile, .dockerignore      Container image
 ├── tests/
 ├── pyproject.toml, uv.lock        Dependencies (locked)
 ├── Makefile                       Developer commands
@@ -361,4 +388,4 @@ AI analysis: `api/routers/analysis.py` (`POST /analyze`), `schemas/analysis.py` 
 
 ## Deployment assumptions
 
-One backend instance, a managed PostgreSQL with persistent storage, and explicit CORS origins. Before public deployment: add access controls or server-enforced quotas to `/analyze`, use a restricted database role, and decide a retention and cleanup policy for `request_logs`.
+One backend container (see [Running in containers](#running-in-containers)), migrations run as a release step, a managed PostgreSQL with persistent storage, and explicit CORS origins. Before public deployment: add access controls or server-enforced quotas to `/analyze`, use a restricted database role, and decide a retention and cleanup policy for `request_logs`.
