@@ -10,6 +10,7 @@ The GitHub Actions workflow is [Backend CI](../.github/workflows/backend-ci.yml)
 | Backend unit tests | pytest on Python 3.12, 3.13, and 3.14, without a database |
 | Backend integration tests | pytest against a PostgreSQL 18 service container: migrations, constraints, and model/migration drift |
 | Backend dependency audit | pip-audit checks installed runtime and development dependencies |
+| Backend container image | Builds the image, starts it with PostgreSQL and migrations through `compose.yaml`, then checks `/health`, that it runs as non-root, and that a demo request is recorded (`scripts/container_smoke.sh`) |
 | Repository secret scan | Gitleaks scans fetched Git history with findings redacted |
 | Backend CI passed | Succeeds only when all preceding jobs succeed |
 
@@ -26,6 +27,7 @@ make sync
 make check
 make test-integration   # needs the local PostgreSQL container
 make audit
+make docker-smoke     # needs Docker
 make pre-commit
 ```
 

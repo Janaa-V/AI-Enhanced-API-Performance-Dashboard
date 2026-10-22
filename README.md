@@ -103,6 +103,7 @@ Not in scope for the first release: authentication, alerting, monitoring real pr
 
 ```text
 backend/     FastAPI service, tests and tooling      -> backend/README.md
+compose.yaml Backend and PostgreSQL in containers
 frontend/    React dashboard                         -> frontend/README.md
 docs/        README images
 ```
@@ -128,6 +129,8 @@ make setup      # install dependencies, create .env pointing at http://127.0.0.1
 make run        # http://localhost:5173
 make check      # API types, lint, format, types, tests
 ```
+
+To run the backend in containers instead (Docker only, with its own PostgreSQL), use `make docker-up` from `backend/`; see [Running in containers](./backend/README.md#running-in-containers).
 
 The raw data is at `http://127.0.0.1:8000/metrics?window_minutes=5&bucket_minutes=1`.
 

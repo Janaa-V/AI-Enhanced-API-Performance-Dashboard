@@ -6,7 +6,7 @@ UV ?= $(shell command -v uv 2>/dev/null || ( [ -x "$$HOME/.local/bin/uv" ] && ec
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration test-live migrate migration traffic backfill openapi openapi-check clean-logs clean-cache clean
+.PHONY: help check-uv install sync env setup run serve lint format format-check typecheck audit pre-commit pre-commit-install check test test-integration test-live migrate migration traffic backfill openapi openapi-check docker-build docker-up docker-down docker-logs docker-smoke clean-logs clean-cache clean
 
 help:
 	@printf '%s\n' \
@@ -32,6 +32,11 @@ help:
   '  make backfill HOURS=24   Write synthetic past rows (invented, not measured)' \
 	  '  make openapi             Write the API schema to frontend/openapi.json' \
 	  '  make openapi-check       Fail if frontend/openapi.json is out of date' \
+	  '  make docker-build        Build the backend image (performance-dashboard-backend:local)' \
+	  '  make docker-up           Start PostgreSQL, migrations and the backend in containers' \
+	  '  make docker-down         Stop the containers; add ARGS=--volumes to delete the data' \
+	  '  make docker-logs         Follow the backend container logs' \
+	  '  make docker-smoke        Build, start and check the containers, then remove them' \
 	  '  make pre-commit          Run pre-commit hooks on all files' \
 	  '  make pre-commit-install  Install pre-commit Git hooks' \
 	  '  make clean-logs          Delete backend .log and numbered rotated log files' \
@@ -114,6 +119,23 @@ openapi: check-uv
 
 openapi-check: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run python -m scripts.export_openapi --check
+
+COMPOSE := docker compose --project-directory "$(BACKEND_DIR)/.." --file "$(BACKEND_DIR)/../compose.yaml"
+
+docker-build:
+	docker build --tag performance-dashboard-backend:local "$(BACKEND_DIR)"
+
+docker-up:
+	$(COMPOSE) up --build --detach --wait
+
+docker-down:
+	$(COMPOSE) down $(ARGS)
+
+docker-logs:
+	$(COMPOSE) logs --follow backend
+
+docker-smoke:
+	"$(BACKEND_DIR)/scripts/container_smoke.sh"
 
 migrate: check-uv
 	cd "$(BACKEND_DIR)" && "$(UV)" run alembic upgrade head

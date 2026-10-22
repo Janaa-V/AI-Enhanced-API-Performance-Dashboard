@@ -1,0 +1,60 @@
+# The backend and its own PostgreSQL in containers: `docker compose up --build --wait`.
+# The database is reachable only inside this project's network (no published port), so it
+# never clashes with another PostgreSQL on 5432. The password below defaults to a local-only
+# value for that reason; set DB_PASSWORD in the shell to change it.
+name: performance-dashboard
+
+x-database-settings: &database-settings
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_NAME: performance_dashboard
+  DB_USER: dashboard
+  DB_PASSWORD: ${DB_PASSWORD:-local-compose-only}
+
+x-backend-image: &backend-image
+  build: ./backend
+  image: performance-dashboard-backend:local
+
+services:
+  db:
+    image: postgres:18@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    environment:
+      POSTGRES_DB: performance_dashboard
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-local-compose-only}
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d performance_dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Runs once and exits: migrations are a release step, not part of server startup.
+  migrate:
+    <<: *backend-image
+    command: ["alembic", "upgrade", "head"]
+    environment: *database-settings
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    <<: *backend-image
+    # Optional: reuses AI and simulation settings from backend/.env. The database settings
+    # below always win, because `environment` overrides `env_file`.
+    env_file:
+      - path: backend/.env
+        required: false
+    environment: *database-settings
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  db_data:

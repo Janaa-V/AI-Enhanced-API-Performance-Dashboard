@@ -131,6 +131,20 @@ jobs:
       - name: Audit installed runtime and development dependencies
         run: make audit
 
+  container:
+    name: Backend container image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image, migrate, start it and check it
+        run: backend/scripts/container_smoke.sh
+
   secret-scan:
     name: Repository secret scan
     runs-on: ubuntu-24.04
@@ -166,7 +180,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: ${{ always() }}
-    needs: [quality, unit-tests, integration-tests, dependency-audit, secret-scan]
+    needs: [quality, unit-tests, integration-tests, dependency-audit, container, secret-scan]
     steps:
       - name: Require every check to succeed
         working-directory: .
@@ -175,9 +189,10 @@ jobs:
           TEST_RESULT: ${{ needs.unit-tests.result }}
           INTEGRATION_RESULT: ${{ needs.integration-tests.result }}
           AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+          CONTAINER_RESULT: ${{ needs.container.result }}
           SECRET_RESULT: ${{ needs.secret-scan.result }}
         run: |
-          for result in "$QUALITY_RESULT" "$TEST_RESULT" "$INTEGRATION_RESULT" "$AUDIT_RESULT" "$SECRET_RESULT"; do
+          for result in "$QUALITY_RESULT" "$TEST_RESULT" "$INTEGRATION_RESULT" "$AUDIT_RESULT" "$CONTAINER_RESULT" "$SECRET_RESULT"; do
             if [ "$result" != success ]; then
               echo "A required backend check failed, was cancelled, or was skipped."
               exit 1
